@@ -117,11 +117,10 @@ class LLMService:
             raise RuntimeError("No LLM provider available")
 
     def _parse_json_response(self, content: str) -> any:
-        """Parse JSON from LLM response, handling markdown code blocks"""
+        """Parse JSON from LLM response, handling markdown code blocks and extra text"""
         content = content.strip()
         # Remove markdown code blocks if present
         if "```" in content:
-            # Find content between code blocks
             parts = content.split("```")
             for part in parts:
                 part = part.strip()
@@ -130,7 +129,54 @@ class LLMService:
                 if part.startswith("[") or part.startswith("{"):
                     content = part
                     break
-        return json.loads(content)
+
+        # Find the first JSON array or object
+        if not content.startswith("[") and not content.startswith("{"):
+            bracket_pos = content.find("[")
+            brace_pos = content.find("{")
+            if bracket_pos >= 0 and (brace_pos < 0 or bracket_pos < brace_pos):
+                content = content[bracket_pos:]
+            elif brace_pos >= 0:
+                content = content[brace_pos:]
+
+        # Try to parse, handling extra data after JSON
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as e:
+            if "Extra data" in str(e):
+                # Find the matching closing bracket/brace
+                if content.startswith("["):
+                    end_pos = self._find_json_end(content, "[", "]")
+                else:
+                    end_pos = self._find_json_end(content, "{", "}")
+                if end_pos > 0:
+                    return json.loads(content[:end_pos])
+            raise
+
+    def _find_json_end(self, content: str, open_char: str, close_char: str) -> int:
+        """Find the position of the matching closing bracket/brace"""
+        depth = 0
+        in_string = False
+        escape = False
+        for i, char in enumerate(content):
+            if escape:
+                escape = False
+                continue
+            if char == '\\' and in_string:
+                escape = True
+                continue
+            if char == '"' and not escape:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if char == open_char:
+                depth += 1
+            elif char == close_char:
+                depth -= 1
+                if depth == 0:
+                    return i + 1
+        return -1
 
     async def rewrite_article(
         self,
@@ -249,22 +295,31 @@ Only output the JSON array, no other text."""
 
         sentences_text = "\n".join([f"{i+1}. {s}" for i, s in enumerate(sentences)])
 
-        prompt = f"""Translate English to Chinese for a language learner.
+        # Basic vocab the LLM can always use
+        basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 星期一/二/三/四/五/六/天, 一月到十二月, 个只条张本件, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么"
 
-KNOWN VOCABULARY (use words from this list):
+        prompt = f"""You are helping a Chinese learner read English content. Translate to Chinese using ONLY their known vocabulary.
+
+CRITICAL: The student can ONLY read words from these lists. Using other words means they cannot understand.
+
+BASIC VOCABULARY (always available - numbers, pronouns, particles, etc.):
+{basic_vocab}
+
+KNOWN VOCABULARY (the student knows these - use freely):
 {learned_list}
 
-REVIEW WORDS (try to include some of these naturally):
+REVIEW WORDS (student has seen before - TRY to include 2-3 of these):
 {due_list}
 
 SENTENCES TO TRANSLATE:
 {sentences_text}
 
-Rules:
-- Use simple, natural Chinese
-- Prefer words from the known vocabulary list
-- Include review words where they fit naturally
-- If needed, use common words not in the list
+STRICT RULES:
+1. Use ONLY words from BASIC, KNOWN, and REVIEW vocabulary lists
+2. If a concept cannot be expressed with known words, rephrase it using known words
+3. Proper nouns (names, places) are OK to keep
+4. Short, simple sentences are better than complex ones with unknown words
+5. Numbers, dates, times should use the basic vocabulary
 
 Return ONLY a JSON array:
 [{{"english": "original", "chinese": "translation", "pinyin": "pin yin"}}]"""
@@ -275,6 +330,15 @@ Return ONLY a JSON array:
             print(f"LLM raw response (first 500 chars): {content[:500]}")
             result = self._parse_json_response(content)
             print(f"Parsed {len(result)} sentences")
+
+            # Second pass: get back-translations
+            if result:
+                chinese_sentences = [r.get("chinese", "") for r in result]
+                back_translations = await self._get_back_translations(chinese_sentences)
+                for i, item in enumerate(result):
+                    if i < len(back_translations):
+                        item["back_translation"] = back_translations[i]
+
             return result
         except json.JSONDecodeError as e:
             print(f"JSON parse error: {e}")
@@ -285,6 +349,34 @@ Return ONLY a JSON array:
             import traceback
             traceback.print_exc()
             return []
+
+    async def _get_back_translations(self, chinese_sentences: list[str]) -> list[str]:
+        """Translate Chinese sentences back to English"""
+        if not chinese_sentences:
+            return []
+
+        numbered = "\n".join([f"{i+1}. {s}" for i, s in enumerate(chinese_sentences)])
+        prompt = f"""Translate these Chinese sentences to English. Give literal translations showing exactly what each sentence means.
+
+{numbered}
+
+Return a JSON array of English translations in the same order:
+["translation 1", "translation 2", ...]"""
+
+        try:
+            print(f"Getting back-translations for {len(chinese_sentences)} sentences...")
+            content = await self._call_llm(prompt, max_tokens=1024)
+            print(f"Back-translation response: {content[:300]}")
+            result = self._parse_json_response(content)
+            if isinstance(result, list):
+                print(f"Got {len(result)} back-translations")
+                return [str(r) for r in result]
+        except Exception as e:
+            print(f"Back-translation error: {e}")
+            import traceback
+            traceback.print_exc()
+
+        return [""] * len(chinese_sentences)
 
     def _fallback_parse(self, content: str, original_sentences: list[str]) -> list[dict]:
         """Try to salvage partial results from malformed LLM output"""

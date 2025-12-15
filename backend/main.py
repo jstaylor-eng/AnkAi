@@ -121,6 +121,30 @@ async def get_word(hanzi: str):
     return word.model_dump()
 
 
+@app.get("/api/debug/vocab/{hanzi}")
+async def debug_vocab(hanzi: str):
+    """Debug why a word might not be matching"""
+    result = {
+        "searched": hanzi,
+        "in_vocab": hanzi in vocab_manager.vocab,
+        "in_basic": hanzi in vocab_manager.BASIC_VOCAB,
+        "classification": vocab_manager.classify_word(hanzi).model_dump(),
+    }
+
+    # Search for similar words in vocab
+    similar = []
+    for known in vocab_manager.vocab:
+        if hanzi in known or known in hanzi:
+            similar.append({
+                "word": known,
+                "status": vocab_manager.vocab[known].status.value,
+                "definition": vocab_manager.vocab[known].definition[:50]
+            })
+    result["similar_in_vocab"] = similar[:10]
+
+    return result
+
+
 # Article processing
 
 @app.post("/api/article/process")

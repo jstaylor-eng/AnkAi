@@ -40,23 +40,71 @@ class ArticleProcessor:
 
     async def fetch_article(self, url: str) -> str:
         """Fetch article text from URL"""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, follow_redirects=True, timeout=30.0)
-            response.raise_for_status()
-            # Basic HTML text extraction (could be improved with newspaper3k or trafilatura)
-            text = response.text
-            # Remove script and style elements
-            text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
-            text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL)
-            # Remove HTML tags
-            text = re.sub(r'<[^>]+>', ' ', text)
-            # Clean up whitespace
-            text = ' '.join(text.split())
-            return text
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Cache-Control": "max-age=0",
+        }
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=headers, follow_redirects=True, timeout=30.0)
+                response.raise_for_status()
+                # Basic HTML text extraction
+                text = response.text
+                # Remove script and style elements
+                text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
+                text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL)
+                # Remove HTML tags
+                text = re.sub(r'<[^>]+>', ' ', text)
+                # Clean up whitespace
+                text = ' '.join(text.split())
+                return text
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403:
+                raise ValueError(f"This website blocks automated access. Please copy and paste the article text instead.")
+            raise
 
     def segment_text(self, text: str) -> list[str]:
         """Segment Chinese text into words using jieba"""
-        return list(jieba.cut(text))
+        segments = list(jieba.cut(text))
+        # Post-process to split number+unit compounds (e.g., 十五分钟 -> 十五, 分钟)
+        return self._split_numeric_compounds(segments)
+
+    def _split_numeric_compounds(self, segments: list[str]) -> list[str]:
+        """Split numeric compounds like 十五分钟 into number + unit"""
+        result = []
+        # Pattern for Chinese numbers
+        num_chars = set("零一二两三四五六七八九十百千万亿")
+        # Common units that follow numbers
+        units = {"分钟", "小时", "天", "年", "月", "日", "号", "周", "星期", "秒", "点", "块", "元", "个", "位", "岁"}
+
+        for seg in segments:
+            if len(seg) > 2:
+                # Check if segment is number + unit
+                split_pos = 0
+                for i, char in enumerate(seg):
+                    if char in num_chars:
+                        split_pos = i + 1
+                    else:
+                        break
+                # Check if remaining part is a unit
+                if split_pos > 0 and split_pos < len(seg):
+                    remaining = seg[split_pos:]
+                    if remaining in units or remaining in self.vocab_manager.vocab:
+                        result.append(seg[:split_pos])
+                        result.append(remaining)
+                        continue
+            result.append(seg)
+        return result
 
     def classify_segments(self, segments: list[str]) -> list[Word]:
         """Classify each segment as known/unknown vocabulary"""
@@ -267,6 +315,8 @@ class ArticleProcessor:
         for item in translations:
             chinese = item.get("chinese", "")
             english = item.get("english", "")
+            # Use back_translation if available, otherwise fall back to original
+            back_translation = item.get("back_translation", english)
 
             # Segment the Chinese
             segments = self.segment_text(chinese)
@@ -284,10 +334,10 @@ class ArticleProcessor:
                         all_new_words[word.hanzi] = word
 
             sentences.append(Sentence(
-                original=english,  # Original is English
-                simplified=chinese,  # Simplified is the Chinese translation
+                original=english,  # Original English source
+                simplified=chinese,  # Simplified Chinese translation
                 words=words,
-                translation=english  # Translation is the English
+                translation=back_translation  # What the simplified Chinese actually means
             ))
 
         comprehension = (known_words / total_words * 100) if total_words > 0 else 100
