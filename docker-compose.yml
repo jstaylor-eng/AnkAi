@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  anki:
+    image: ghcr.io/mlcivilengineer/anki-desktop-docker:latest
+    container_name: ankai-anki
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    volumes:
+      - anki_data:/config
+      - ./anki/addons21:/config/.local/share/Anki2/addons21
+    ports:
+      - "3000:3000"   # VNC web interface (for initial AnkiWeb login)
+      - "8765:8765"   # AnkiConnect API
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: ankai-backend
+    environment:
+      - ANKI_CONNECT_URL=http://anki:8765
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - anki
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: ankai-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  anki_data:

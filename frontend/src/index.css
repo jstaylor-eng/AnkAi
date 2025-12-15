@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+}
+
+/* Chinese text styling */
+.chinese-text {
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}
+
+/* Pinyin above characters */
+.pinyin {
+  font-size: 0.65em;
+  color: #666;
+  letter-spacing: 0.05em;
+}
+
+/* Word status colors */
+.word-learned {
+  color: inherit;
+}
+
+.word-due {
+  color: #c2410c;
+  background-color: #fff7ed;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.word-new {
+  color: #0369a1;
+  background-color: #f0f9ff;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.word-unknown {
+  color: #9ca3af;
+  text-decoration: underline dotted;
+}
