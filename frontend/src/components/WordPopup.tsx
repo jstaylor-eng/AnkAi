@@ -1,10 +1,19 @@
+import { useState, useEffect } from 'react'
 import type { Word } from '../types'
+
+interface Intervals {
+  again: string
+  hard: string
+  good: string
+  easy: string
+}
 
 interface WordPopupProps {
   word: Word
   position: { x: number; y: number }
   onReview: (ease: number) => void
   onClose: () => void
+  getIntervals?: (cardId: number) => Promise<{ intervals: Intervals | null }>
 }
 
 const statusLabels = {
@@ -21,8 +30,17 @@ const statusColors = {
   unknown: 'text-gray-500 bg-gray-50',
 }
 
-export function WordPopup({ word, position, onReview, onClose }: WordPopupProps) {
+export function WordPopup({ word, position, onReview, onClose, getIntervals }: WordPopupProps) {
   const canReview = word.card_id !== null && (word.status === 'due' || word.status === 'new')
+  const [intervals, setIntervals] = useState<Intervals | null>(null)
+
+  useEffect(() => {
+    if (canReview && word.card_id && getIntervals) {
+      getIntervals(word.card_id)
+        .then(data => setIntervals(data.intervals))
+        .catch(() => setIntervals(null))
+    }
+  }, [canReview, word.card_id, getIntervals])
 
   return (
     <>
@@ -74,27 +92,27 @@ export function WordPopup({ word, position, onReview, onClose }: WordPopupProps)
             <div className="flex gap-2">
               <button
                 onClick={() => onReview(1)}
-                className="flex-1 py-1.5 px-2 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                className="flex-1 py-1.5 px-2 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 flex flex-col items-center"
               >
-                Again
+                <span className="font-medium">{intervals?.again || 'Again'}</span>
               </button>
               <button
                 onClick={() => onReview(2)}
-                className="flex-1 py-1.5 px-2 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200"
+                className="flex-1 py-1.5 px-2 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 flex flex-col items-center"
               >
-                Hard
+                <span className="font-medium">{intervals?.hard || 'Hard'}</span>
               </button>
               <button
                 onClick={() => onReview(3)}
-                className="flex-1 py-1.5 px-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                className="flex-1 py-1.5 px-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 flex flex-col items-center"
               >
-                Good
+                <span className="font-medium">{intervals?.good || 'Good'}</span>
               </button>
               <button
                 onClick={() => onReview(4)}
-                className="flex-1 py-1.5 px-2 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                className="flex-1 py-1.5 px-2 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 flex flex-col items-center"
               >
-                Easy
+                <span className="font-medium">{intervals?.easy || 'Easy'}</span>
               </button>
             </div>
           </div>

@@ -281,8 +281,8 @@ Only output the JSON array, no other text."""
 
         # Split text into sentences first
         import re
-        sentences = re.split(r'(?<=[.!?])\s+', text[:3000])
-        sentences = [s.strip() for s in sentences if s.strip() and len(s) > 10][:8]
+        sentences = re.split(r'(?<=[.!?])\s+', text[:10000])
+        sentences = [s.strip() for s in sentences if s.strip() and len(s) > 10][:25]
 
         if not sentences:
             print("No sentences found to translate")
@@ -298,7 +298,7 @@ Only output the JSON array, no other text."""
         # Basic vocab the LLM can always use
         basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 星期一/二/三/四/五/六/天, 一月到十二月, 个只条张本件, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么"
 
-        prompt = f"""You are helping a Chinese learner read English content. Translate to Chinese using ONLY their known vocabulary.
+        prompt = f"""You are helping a Chinese learner read content from their native language or Chinese beyond their level. Translate to Chinese using ONLY their known vocabulary.
 
 CRITICAL: The student can ONLY read words from these lists. Using other words means they cannot understand.
 
@@ -308,7 +308,7 @@ BASIC VOCABULARY (always available - numbers, pronouns, particles, etc.):
 KNOWN VOCABULARY (the student knows these - use freely):
 {learned_list}
 
-REVIEW WORDS (student has seen before - TRY to include 2-3 of these):
+REVIEW WORDS (student has seen before - TRY to include these wherever possible):
 {due_list}
 
 SENTENCES TO TRANSLATE:
@@ -317,9 +317,11 @@ SENTENCES TO TRANSLATE:
 STRICT RULES:
 1. Use ONLY words from BASIC, KNOWN, and REVIEW vocabulary lists
 2. If a concept cannot be expressed with known words, rephrase it using known words
-3. Proper nouns (names, places) are OK to keep
-4. Short, simple sentences are better than complex ones with unknown words
-5. Numbers, dates, times should use the basic vocabulary
+3. PRIORITIZE including REVIEW WORDS - rephrase or add context to fit them in naturally
+4. Proper nouns (names, places) are OK to keep
+5. Short, simple sentences are better than complex ones with unknown words
+6. Numbers, dates, times should use the basic vocabulary
+7. PRESERVE the person (first/third) and perspective of the original - if someone says "I feel...", translate as 我觉得, not 她觉得
 
 Return ONLY a JSON array:
 [{{"english": "original", "chinese": "translation", "pinyin": "pin yin"}}]"""
@@ -330,6 +332,12 @@ Return ONLY a JSON array:
             print(f"LLM raw response (first 500 chars): {content[:500]}")
             result = self._parse_json_response(content)
             print(f"Parsed {len(result)} sentences")
+
+            # Replace LLM's "english" with actual original sentences
+            # (LLM often paraphrases to match the simplified Chinese)
+            for i, item in enumerate(result):
+                if i < len(sentences):
+                    item["english"] = sentences[i]
 
             # Second pass: get back-translations
             if result:

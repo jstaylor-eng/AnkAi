@@ -48,10 +48,20 @@ app.add_middleware(
 
 @app.get("/api/health")
 async def health_check():
-    """Check if API and Anki are available"""
+    """Check if API and Anki are available, and sync with AnkiWeb"""
     try:
         version = await anki_client.version()
-        return {"status": "ok", "anki_connect_version": version}
+
+        # Auto-sync with AnkiWeb to get latest reviews from other devices
+        try:
+            await anki_client.sync()
+            print("Auto-synced with AnkiWeb on startup")
+            sync_status = "synced"
+        except Exception as sync_err:
+            print(f"Auto-sync failed (non-critical): {sync_err}")
+            sync_status = "sync_failed"
+
+        return {"status": "ok", "anki_connect_version": version, "sync": sync_status}
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
@@ -73,12 +83,15 @@ async def select_decks(selection: DeckSelection):
     """Select decks to use for vocabulary"""
     try:
         stats = await vocab_manager.select_decks(selection.deck_names)
+        # Get daily new card limit from deck config
+        daily_limit = await vocab_manager.update_daily_limit_from_deck()
         # Reinitialize article processor with updated vocab
         global article_processor
         article_processor = ArticleProcessor(vocab_manager)
         return {
             "selected": selection.deck_names,
-            "stats": stats
+            "stats": stats,
+            "daily_new_limit": daily_limit
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -114,11 +127,238 @@ async def get_new_vocab():
     return {"new_words": [w.model_dump() for w in new_words]}
 
 
+@app.get("/api/vocab/daily-stats")
+async def get_daily_stats():
+    """Get daily new word introduction stats"""
+    return vocab_manager.get_daily_stats()
+
+
 @app.get("/api/word/{hanzi}")
 async def get_word(hanzi: str):
     """Get info for a specific word"""
     word = vocab_manager.classify_word(hanzi)
     return word.model_dump()
+
+
+def format_interval(interval: int) -> str:
+    """Format interval (negative=seconds, positive=days) to human readable"""
+    if interval < 0:
+        # Seconds (negative value) - learning intervals use "<" prefix like Anki
+        seconds = abs(interval)
+        if seconds < 60:
+            return "<1m"
+        elif seconds < 3600:
+            mins = seconds // 60
+            return f"<{mins}m"
+        else:
+            hours = seconds // 3600
+            return f"<{hours}h"
+    else:
+        # Days (positive value) - review intervals
+        if interval == 0:
+            return "<1d"
+        elif interval == 1:
+            return "1d"
+        elif interval < 30:
+            return f"{interval}d"
+        elif interval < 365:
+            return f"{interval // 30}mo"
+        else:
+            return f"{interval // 365}y"
+
+
+def calculate_review_intervals(card_info: dict, deck_config: dict) -> dict:
+    """
+    Calculate the 4 button intervals based on card state and deck settings.
+
+    Queue values: 0=new, 1=learning, 2=review, 3=relearning
+    """
+    queue = card_info.get("queue", 0)
+    interval = card_info.get("interval", 0)  # Current interval in days
+    factor = card_info.get("factor", 2500)   # Ease factor (2500 = 2.5x)
+    left = card_info.get("left", 0)          # Learning steps remaining
+
+    # Get deck settings
+    new_config = deck_config.get("new", {})
+    rev_config = deck_config.get("rev", {})
+    lapse_config = deck_config.get("lapse", {})
+
+    # Learning steps in minutes (e.g., [1, 10] for 1m, 10m)
+    learning_steps = new_config.get("delays", [1, 10])
+    # Graduating interval in days
+    graduating_ivl = new_config.get("ints", [1, 4])[0] if new_config.get("ints") else 1
+    # Easy interval in days
+    easy_ivl = new_config.get("ints", [1, 4])[1] if new_config.get("ints") and len(new_config.get("ints", [])) > 1 else 4
+    # Lapse (relearning) steps in minutes
+    lapse_steps = lapse_config.get("delays", [10])
+
+    # Convert minutes to negative seconds for format_interval
+    def mins_to_secs(m):
+        return -int(m * 60)
+
+    def ensure_distinct(intervals_dict):
+        """Ensure all 4 interval strings are distinct by adjusting duplicates."""
+        keys = ["again", "hard", "good", "easy"]
+        seen = {}
+        result = {}
+
+        for key in keys:
+            val = intervals_dict[key]
+            if val in seen:
+                # Duplicate found - modify to make distinct
+                # Add a suffix or adjust the value
+                if val.endswith("m"):
+                    # Try adding 1 minute increments
+                    base = int(val.rstrip("m")) if val[0] != "<" else 0
+                    for i in range(1, 60):
+                        new_val = f"{base + i}m"
+                        if new_val not in seen:
+                            val = new_val
+                            break
+                elif val.endswith("d"):
+                    base = int(val.rstrip("d")) if val[0] != "<" else 0
+                    for i in range(1, 30):
+                        new_val = f"{base + i}d"
+                        if new_val not in seen:
+                            val = new_val
+                            break
+            seen[val] = True
+            result[key] = val
+
+        return result
+
+    if queue == 0:  # New card
+        if len(learning_steps) >= 2:
+            # Use actual learning steps for again/good
+            # Hard = midpoint between step1 and step2 (matches Anki v3 behavior)
+            step1 = learning_steps[0]
+            step2 = learning_steps[1]
+            hard_mins = (step1 + step2 + 1) // 2  # e.g., (1+10+1)//2 = 6
+
+            result = {
+                "again": format_interval(mins_to_secs(step1)),
+                "hard": format_interval(mins_to_secs(hard_mins)),
+                "good": format_interval(mins_to_secs(step2)),
+                "easy": format_interval(easy_ivl),
+            }
+        elif len(learning_steps) == 1:
+            step1 = learning_steps[0]
+            result = {
+                "again": format_interval(mins_to_secs(step1)),
+                "hard": format_interval(mins_to_secs(step1 * 5)),  # Reasonable intermediate
+                "good": format_interval(graduating_ivl),
+                "easy": format_interval(easy_ivl),
+            }
+        else:
+            result = {
+                "again": format_interval(mins_to_secs(1)),
+                "hard": format_interval(mins_to_secs(6)),
+                "good": format_interval(graduating_ivl),
+                "easy": format_interval(easy_ivl),
+            }
+        return ensure_distinct(result)
+
+    elif queue == 1:  # Learning card
+        # Determine current step from 'left' field
+        steps_remaining = left % 1000 if left else 1
+        current_step_idx = len(learning_steps) - steps_remaining
+        if current_step_idx < 0:
+            current_step_idx = 0
+        if current_step_idx >= len(learning_steps):
+            current_step_idx = len(learning_steps) - 1
+
+        current_step = learning_steps[current_step_idx] if learning_steps else 1
+        next_step = learning_steps[current_step_idx + 1] if current_step_idx + 1 < len(learning_steps) else None
+
+        # Hard = midpoint between current step and next (or current * 1.5 if last step)
+        if next_step:
+            hard_mins = (current_step + next_step + 1) // 2
+        else:
+            hard_mins = max(current_step + 1, int(current_step * 1.5))
+
+        result = {
+            "again": format_interval(mins_to_secs(learning_steps[0])),
+            "hard": format_interval(mins_to_secs(hard_mins)),
+            "good": format_interval(mins_to_secs(next_step)) if next_step else format_interval(graduating_ivl),
+            "easy": format_interval(easy_ivl),
+        }
+        return ensure_distinct(result)
+
+    elif queue == 2:  # Review card
+        # Calculate based on current interval and ease factor
+        ease = factor / 1000  # Convert 2500 to 2.5
+        hard_factor = 1.2
+        easy_bonus = 1.3
+
+        # Again: go to relearning
+        again = mins_to_secs(lapse_steps[0]) if lapse_steps else mins_to_secs(10)
+        # Hard: slightly longer than current (ensure at least 1 day more)
+        hard = max(interval + 1, int(interval * hard_factor))
+        # Good: current * ease (ensure at least 1 day more than hard)
+        good = max(hard + 1, int(interval * ease))
+        # Easy: good * easy bonus (ensure at least 1 day more than good)
+        easy = max(good + 1, int(interval * ease * easy_bonus))
+
+        result = {
+            "again": format_interval(again),
+            "hard": format_interval(hard),
+            "good": format_interval(good),
+            "easy": format_interval(easy),
+        }
+        return ensure_distinct(result)
+
+    elif queue == 3:  # Relearning (day)
+        lapse_step = lapse_steps[0] if lapse_steps else 10
+        result = {
+            "again": format_interval(mins_to_secs(lapse_step)),
+            "hard": format_interval(mins_to_secs(max(lapse_step + 1, lapse_step * 2))),
+            "good": format_interval(max(1, interval)),
+            "easy": format_interval(max(interval + 1, int(interval * 1.5), 2)),
+        }
+        return ensure_distinct(result)
+
+    # Fallback defaults
+    return {
+        "again": "<1m",
+        "hard": "6m",
+        "good": "1d",
+        "easy": "4d",
+    }
+
+
+@app.get("/api/card/{card_id}/intervals")
+async def get_card_intervals(card_id: int):
+    """Get next review intervals for all 4 ease buttons based on deck settings"""
+    try:
+        # Get card info
+        cards_info = await anki_client.get_cards_info([card_id])
+        if not cards_info:
+            return {"intervals": None}
+
+        card_info = cards_info[0]
+        deck_name = card_info.get("deckName", "")
+
+        # Get deck configuration
+        try:
+            deck_config = await anki_client.get_deck_config(deck_name)
+        except Exception as e:
+            print(f"Could not get deck config for {deck_name}: {e}")
+            deck_config = {}
+
+        # Calculate intervals based on card state and deck settings
+        intervals = calculate_review_intervals(card_info, deck_config)
+
+        return {
+            "intervals": intervals,
+            "card_state": {
+                "queue": card_info.get("queue"),
+                "interval": card_info.get("interval"),
+                "factor": card_info.get("factor"),
+            }
+        }
+    except Exception as e:
+        print(f"Error getting intervals for card {card_id}: {e}")
+        return {"intervals": None}
 
 
 @app.get("/api/debug/vocab/{hanzi}")
@@ -157,13 +397,65 @@ async def process_article(request: ArticleRequest) -> ProcessedArticle:
         raise HTTPException(status_code=400, detail="Either url or text must be provided")
 
     try:
+        # Get remaining daily allowance for new words
+        remaining_allowance = vocab_manager.get_remaining_new_allowance()
+        # Use the minimum of request limit and remaining daily allowance
+        effective_max_new = min(
+            request.max_new_words if request.max_new_words else remaining_allowance,
+            remaining_allowance
+        )
+        print(f"Daily new word allowance: {remaining_allowance}, using max: {effective_max_new}")
+
         result = await article_processor.process_article(
             text=request.text,
             url=request.url,
             rewrite=request.rewrite,
-            max_new_words=request.max_new_words,
+            max_new_words=effective_max_new,
             source_lang=request.source_lang
         )
+
+        # Limit new words to daily allowance, selecting the most frequent ones
+        if result.new_words and len(result.new_words) > effective_max_new:
+            # Count frequency of each new word in the article
+            new_word_freq = {}
+            for sentence in result.sentences:
+                for word in sentence.words:
+                    if word.status == VocabStatus.NEW:
+                        new_word_freq[word.hanzi] = new_word_freq.get(word.hanzi, 0) + 1
+
+            # Sort new words by frequency (most frequent first)
+            sorted_new_words = sorted(
+                result.new_words,
+                key=lambda w: new_word_freq.get(w.hanzi, 0),
+                reverse=True
+            )
+
+            # Keep only the top N most frequent new words
+            allowed_new_words = sorted_new_words[:effective_max_new]
+            allowed_hanzi = {w.hanzi for w in allowed_new_words}
+            excess_hanzi = {w.hanzi for w in sorted_new_words[effective_max_new:]}
+
+            # Update the new_words list
+            result.new_words = allowed_new_words
+
+            # Change excess new words to "unknown" status in sentences
+            for sentence in result.sentences:
+                for word in sentence.words:
+                    if word.hanzi in excess_hanzi and word.status == VocabStatus.NEW:
+                        word.status = VocabStatus.UNKNOWN
+
+            # Update stats
+            result.stats["new_count"] = len(allowed_new_words)
+            print(f"Selected top {effective_max_new} new words by frequency from {len(excess_hanzi) + effective_max_new} found")
+
+        # Mark new words as "introduced" for daily tracking
+        if result.new_words:
+            new_word_hanzi = [w.hanzi for w in result.new_words]
+            vocab_manager.mark_words_introduced(new_word_hanzi)
+
+        # Add daily stats to the response
+        result.stats["daily_new_remaining"] = vocab_manager.get_remaining_new_allowance()
+
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -178,13 +470,34 @@ async def submit_review(review: ReviewRequest):
         raise HTTPException(status_code=400, detail="Ease must be between 1 and 4")
 
     try:
+        print(f"Submitting review: card_id={review.card_id}, ease={review.ease}")
+
+        # Get card info before review
+        card_info_before = await anki_client.get_cards_info([review.card_id])
+        print(f"Card before: queue={card_info_before[0].get('queue')}, due={card_info_before[0].get('due')}")
+
         results = await anki_client.answer_cards([
             {"cardId": review.card_id, "ease": review.ease}
         ])
+        print(f"AnkiConnect answerCards result: {results}")
+
+        # Get card info after review
+        card_info_after = await anki_client.get_cards_info([review.card_id])
+        print(f"Card after: queue={card_info_after[0].get('queue')}, due={card_info_after[0].get('due')}")
+
         # Refresh the card status in our vocab cache
         await vocab_manager.refresh_card_status(review.card_id)
-        return {"success": results[0] if results else False}
+
+        # Auto-sync to AnkiWeb so changes propagate to other devices
+        try:
+            await anki_client.sync()
+            print("Auto-synced to AnkiWeb")
+        except Exception as sync_err:
+            print(f"Auto-sync failed (non-critical): {sync_err}")
+
+        return {"success": results[0] if results else False, "result": results}
     except Exception as e:
+        print(f"Review error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

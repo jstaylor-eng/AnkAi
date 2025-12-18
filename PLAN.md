@@ -604,6 +604,264 @@ Returns: {key: "session_key"}
 
 ---
 
+## Cloud Deployment (Oracle Cloud Free Tier)
+
+Oracle Cloud offers an always-free tier that's perfect for this application:
+- **4 ARM CPUs, 24GB RAM** (Ampere A1) - FREE forever
+- **200GB block storage** - FREE
+- No credit card required in many regions
+
+### Architecture on Oracle Cloud
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    Oracle Cloud VM (ARM)                      │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                    Docker Compose                        │ │
+│  │                                                          │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │ │
+│  │  │   Frontend   │  │   Backend    │  │    Anki      │   │ │
+│  │  │   (nginx)    │  │  (FastAPI)   │  │   Desktop    │   │ │
+│  │  │   :80/:443   │  │    :8000     │  │  + Connect   │   │ │
+│  │  └──────────────┘  └──────────────┘  │    :8765     │   │ │
+│  │         │                 │          │    :3000     │   │ │
+│  │         │                 │          │   (VNC)      │   │ │
+│  │         │                 │          └──────────────┘   │ │
+│  │         │                 │                 │           │ │
+│  │         └────────┬────────┴─────────────────┘           │ │
+│  │                  │                                       │ │
+│  └──────────────────┼───────────────────────────────────────┘ │
+│                     │                                        │
+│              Caddy Reverse Proxy                             │
+│              (auto HTTPS via Let's Encrypt)                  │
+│                     │                                        │
+└─────────────────────┼────────────────────────────────────────┘
+                      │
+                   Internet
+                      │
+              ┌───────┴───────┐
+              │  Your Phone   │
+              │   Browser     │
+              └───────────────┘
+```
+
+### Setup Steps
+
+#### 1. Create Oracle Cloud Account
+1. Go to https://cloud.oracle.com
+2. Sign up for free tier (no credit card in many regions)
+3. Choose a region close to you
+
+#### 2. Create VM Instance
+```bash
+# In Oracle Cloud Console:
+# Compute → Instances → Create Instance
+
+# Settings:
+# - Image: Ubuntu 22.04 (ARM compatible)
+# - Shape: VM.Standard.A1.Flex
+# - OCPUs: 4 (free), Memory: 24GB (free)
+# - Add SSH key for access
+# - Boot volume: 100GB (free up to 200GB)
+```
+
+#### 3. Configure Security Rules
+```bash
+# In Oracle Cloud Console:
+# Networking → Virtual Cloud Networks → Your VCN → Security Lists
+
+# Add Ingress Rules:
+# - Port 80 (HTTP)
+# - Port 443 (HTTPS)
+# - Port 3000 (VNC for Anki setup - temporary)
+```
+
+#### 4. SSH into VM and Install Docker
+```bash
+ssh ubuntu@<your-vm-ip>
+
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Install Docker Compose
+sudo apt install docker-compose-plugin
+```
+
+#### 5. Clone and Configure AnkAi
+```bash
+git clone https://github.com/yourusername/AnkAi.git
+cd AnkAi
+
+# Create .env file
+cat > .env << 'EOF'
+GROQ_API_KEY=gsk_your_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
+LLM_PROVIDER=groq
+ANKIWEB_USER=your_ankiweb_email
+ANKIWEB_PASS=your_ankiweb_password
+EOF
+```
+
+#### 6. Create Production Docker Compose
+```yaml
+# docker-compose.prod.yml
+version: '3.8'
+
+services:
+  anki:
+    image: mlcivilengineer/anki-desktop:latest
+    platform: linux/amd64  # Needs emulation on ARM
+    environment:
+      - DISPLAY=:99
+    volumes:
+      - anki_data:/root/.local/share/Anki2
+    ports:
+      - "3000:3000"  # VNC (remove after setup)
+      - "8765:8765"  # AnkiConnect
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    environment:
+      - ANKI_CONNECT_URL=http://anki:8765
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL}
+      - LLM_PROVIDER=${LLM_PROVIDER}
+    depends_on:
+      - anki
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+volumes:
+  anki_data:
+  caddy_data:
+```
+
+#### 7. Create Caddyfile (Auto-HTTPS)
+```
+# Caddyfile
+your-domain.com {
+    # Frontend
+    handle /* {
+        reverse_proxy frontend:80
+    }
+
+    # API
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+}
+```
+
+If you don't have a domain, use the VM's public IP with HTTP only:
+```
+:80 {
+    handle /* {
+        reverse_proxy frontend:80
+    }
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+}
+```
+
+#### 8. Build and Run
+```bash
+# Build containers
+docker compose -f docker-compose.prod.yml build
+
+# Start services
+docker compose -f docker-compose.prod.yml up -d
+
+# Check logs
+docker compose -f docker-compose.prod.yml logs -f
+```
+
+#### 9. Initial Anki Setup (one-time)
+```bash
+# Access VNC in browser
+# Go to http://<your-vm-ip>:3000
+
+# In Anki (via VNC):
+# 1. Click Sync
+# 2. Log in with AnkiWeb credentials
+# 3. Download your decks
+# 4. Close VNC
+
+# After setup, remove VNC port from security rules for safety
+```
+
+#### 10. Set Up Auto-Sync (cron)
+```bash
+# Create sync script
+cat > /home/ubuntu/AnkAi/sync-anki.sh << 'EOF'
+#!/bin/bash
+curl -s http://localhost:8765 -X POST -d '{"action": "sync", "version": 6}'
+EOF
+chmod +x /home/ubuntu/AnkAi/sync-anki.sh
+
+# Add to crontab (sync every hour)
+(crontab -l 2>/dev/null; echo "0 * * * * /home/ubuntu/AnkAi/sync-anki.sh") | crontab -
+```
+
+### Free Domain Options
+
+If you don't have a domain:
+1. **DuckDNS** (free): https://www.duckdns.org - Get a subdomain like `ankai.duckdns.org`
+2. **FreeDNS**: https://freedns.afraid.org
+3. **No domain**: Just use `http://<vm-ip>` (no HTTPS)
+
+### Maintenance
+
+```bash
+# View logs
+docker compose -f docker-compose.prod.yml logs -f backend
+
+# Restart services
+docker compose -f docker-compose.prod.yml restart
+
+# Update code
+git pull
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d
+
+# Manual Anki sync
+curl http://localhost:8765 -X POST -d '{"action": "sync", "version": 6}'
+```
+
+### Cost Summary
+
+| Resource | Oracle Free Tier |
+|----------|-----------------|
+| Compute (4 ARM cores, 24GB) | FREE |
+| Storage (200GB) | FREE |
+| Bandwidth (10TB/month) | FREE |
+| Public IP | FREE |
+| **Total** | **$0/month** |
+
+---
+
 ## References
 
 - [AnkiConnect API](https://git.sr.ht/~foosoft/anki-connect) - REST API for Anki

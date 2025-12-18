@@ -42,6 +42,11 @@ CEDICT = load_cedict()
 class VocabManager:
     """Manages vocabulary from Anki decks"""
 
+    # Track new words introduced today (across all articles)
+    _introduced_today: set[str] = set()
+    _introduced_date: str = ""  # ISO date string for reset check
+    _daily_new_limit: int = 5   # Default, will be updated from deck config
+
     # Basic vocabulary assumed known by any learner (HSK1-3 level essentials)
     BASIC_VOCAB = {
         # Numbers
@@ -332,3 +337,57 @@ class VocabManager:
                     else:
                         word.status = VocabStatus.LEARNED
                     break
+
+    # --- Daily new word limit management ---
+
+    def _check_date_reset(self) -> None:
+        """Reset introduced words if it's a new day"""
+        from datetime import date
+        today = date.today().isoformat()
+        if today != VocabManager._introduced_date:
+            VocabManager._introduced_today = set()
+            VocabManager._introduced_date = today
+            print(f"New day detected, reset introduced words tracker")
+
+    async def update_daily_limit_from_deck(self) -> int:
+        """Get the new cards per day limit from the first selected deck"""
+        if not self.selected_decks:
+            return VocabManager._daily_new_limit
+
+        try:
+            deck_config = await anki_client.get_deck_config(self.selected_decks[0])
+            new_per_day = deck_config.get("new", {}).get("perDay", 5)
+            VocabManager._daily_new_limit = new_per_day
+            print(f"Updated daily new card limit from deck config: {new_per_day}")
+            return new_per_day
+        except Exception as e:
+            print(f"Could not get deck config for daily limit: {e}")
+            return VocabManager._daily_new_limit
+
+    def get_remaining_new_allowance(self) -> int:
+        """Get how many more new words can be introduced today"""
+        self._check_date_reset()
+        remaining = VocabManager._daily_new_limit - len(VocabManager._introduced_today)
+        return max(0, remaining)
+
+    def get_introduced_today(self) -> set[str]:
+        """Get the set of new words introduced today"""
+        self._check_date_reset()
+        return VocabManager._introduced_today.copy()
+
+    def mark_words_introduced(self, words: list[str]) -> None:
+        """Mark words as introduced today"""
+        self._check_date_reset()
+        for word in words:
+            VocabManager._introduced_today.add(word)
+        print(f"Marked {len(words)} new words as introduced. Total today: {len(VocabManager._introduced_today)}")
+
+    def get_daily_stats(self) -> dict:
+        """Get stats about daily new word usage"""
+        self._check_date_reset()
+        return {
+            "daily_limit": VocabManager._daily_new_limit,
+            "introduced_today": len(VocabManager._introduced_today),
+            "remaining": self.get_remaining_new_allowance(),
+            "words": list(VocabManager._introduced_today)
+        }

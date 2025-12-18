@@ -74,6 +74,12 @@ export function useAnki() {
     return fetchApi<{ status: string }>('/sync', { method: 'POST' })
   }, [fetchApi])
 
+  const getCardIntervals = useCallback(async (cardId: number) => {
+    return fetchApi<{
+      intervals: { again: string; hard: string; good: string; easy: string } | null
+    }>(`/card/${cardId}/intervals`)
+  }, [fetchApi])
+
   return {
     loading,
     error,
@@ -83,5 +89,6 @@ export function useAnki() {
     processArticle,
     submitReview,
     triggerSync,
+    getCardIntervals,
   }
 }

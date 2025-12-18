@@ -23,6 +23,7 @@ function App() {
     processArticle,
     submitReview,
     triggerSync,
+    getCardIntervals,
   } = useAnki()
 
   useEffect(() => {
@@ -145,7 +146,7 @@ function App() {
           </div>
         </header>
         <main className="p-4">
-          <Reader article={article} onReview={handleReview} />
+          <Reader article={article} onReview={handleReview} getCardIntervals={getCardIntervals} />
         </main>
       </div>
     )

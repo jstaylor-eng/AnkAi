@@ -1,0 +1,23 @@
+check anki documentation, there is a whole thing for how their card review scedules are set and it can be made unique to each deck
+
+AnkAi Handover
+
+  Project: Language learning app using Anki flashcards as vocabulary source. Translates articles to Chinese using only words the user knows from their Anki decks.
+
+  Stack: FastAPI backend + React/TypeScript frontend + AnkiConnect API
+
+  Current Task: Adding review intervals to word popup buttons (like Anki shows "<1m", "10m", "1d", etc.)
+
+  The Problem:
+  - AnkiConnect's getIntervals with complete=true returns different formats:
+    - Review cards: exactly 4 values [4, 31, 173, 463] → works
+    - Learning cards: many values with negatives (seconds) and positives (days) [-60, -600, 1, 2, 3...]
+    - New cards: just 0
+
+  Current Bug: Some cards show duplicate values (e.g., "5m", "5m", "1d", "4d") because the extraction logic doesn't handle all edge cases properly.
+
+  Key Files:
+  - /home/jamie/Documents/AnkAi/backend/main.py - get_card_intervals() endpoint around line 159
+  - /home/jamie/Documents/AnkAi/frontend/src/components/WordPopup.tsx - displays intervals on buttons
+
+  What's Needed: Fix the interval extraction logic to always return 4 distinct values for Again/Hard/Good/Easy buttons.

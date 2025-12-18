@@ -42,3 +42,60 @@ body {
   color: #9ca3af;
   text-decoration: underline dotted;
 }
+
+/* TTS word highlight */
+.tts-highlight {
+  background-color: #fef08a !important;
+  color: #000 !important;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px #fef08a;
+  animation: pulse-highlight 0.3s ease-out;
+}
+
+@keyframes pulse-highlight {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 2px #fef08a;
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 4px #fde047;
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 2px #fef08a;
+  }
+}
+
+/* Range slider styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s ease-in-out;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: #2563eb;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}

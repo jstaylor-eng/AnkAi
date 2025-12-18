@@ -42,6 +42,11 @@ async def get_deck_names_and_ids() -> dict[str, int]:
     return await invoke("deckNamesAndIds")
 
 
+async def get_deck_config(deck_name: str) -> dict:
+    """Get configuration for a deck including learning steps, intervals, etc."""
+    return await invoke("getDeckConfig", deck=deck_name)
+
+
 # Card operations
 
 async def find_cards(query: str) -> list[int]:
@@ -62,6 +67,14 @@ async def are_due(card_ids: list[int]) -> list[bool]:
 async def get_intervals(card_ids: list[int]) -> list[int]:
     """Get intervals for cards"""
     return await invoke("getIntervals", cards=card_ids)
+
+
+async def get_next_intervals(card_ids: list[int]) -> list[list[int]]:
+    """
+    Get next intervals for all 4 ease buttons.
+    Returns array of [again, hard, good, easy] intervals in seconds (negative) or days (positive).
+    """
+    return await invoke("getIntervals", cards=card_ids, complete=True)
 
 
 # Review operations
