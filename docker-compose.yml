@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   anki:
-    image: ghcr.io/mlcivilengineer/anki-desktop-docker:latest
+    image: mlcivilengineer/anki-desktop-docker:main
     container_name: ankai-anki
     environment:
       - PUID=1000
