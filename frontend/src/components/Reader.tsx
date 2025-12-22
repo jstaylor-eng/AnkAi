@@ -95,53 +95,63 @@ export function Reader({ article, onReview, getCardIntervals }: ReaderProps) {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Stats bar */}
-      <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
-        <div className="flex items-center gap-4 mb-2">
-          <span className="text-gray-600">
-            Comprehension: <strong>{article.stats.comprehension_percent}%</strong>
-          </span>
-          <span className="text-orange-600">
-            Due: <strong>{article.stats.due_count}</strong>
-          </span>
-          <span className="text-blue-600">
-            New: <strong>{article.stats.new_count}</strong>
-          </span>
-          <div className="flex-1" />
-          <label className="flex items-center gap-1 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showPinyin}
-              onChange={(e) => setShowPinyin(e.target.checked)}
-              className="h-3 w-3"
-            />
-            <span className="text-xs">Pinyin</span>
-          </label>
-          <label className="flex items-center gap-1 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showTranslation}
-              onChange={(e) => setShowTranslation(e.target.checked)}
-              className="h-3 w-3"
-            />
-            <span className="text-xs">Translation</span>
-          </label>
-          <label className="flex items-center gap-1 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showOriginal}
-              onChange={(e) => setShowOriginal(e.target.checked)}
-              className="h-3 w-3"
-            />
-            <span className="text-xs">Original</span>
-          </label>
+      {/* Stats bar - sticky below header */}
+      <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm sticky top-[52px] z-10 shadow-sm">
+        {/* Stats and toggles - wraps on mobile */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-2">
+          {/* Stats */}
+          <div className="flex items-center gap-3">
+            <span className="text-gray-600">
+              Comprehension: <strong>{article.stats.comprehension_percent}%</strong>
+            </span>
+            <span className="text-orange-600">
+              Due: <strong>{article.stats.due_count}</strong>
+            </span>
+            <span className="text-blue-600">
+              New: <strong>{article.stats.new_count}</strong>
+            </span>
+          </div>
+
+          {/* Spacer - hidden on mobile */}
+          <div className="hidden sm:flex flex-1" />
+
+          {/* Toggles - wrap to new line on mobile */}
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={showPinyin}
+                onChange={(e) => setShowPinyin(e.target.checked)}
+                className="h-3 w-3"
+              />
+              <span className="text-xs">Pinyin</span>
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={showTranslation}
+                onChange={(e) => setShowTranslation(e.target.checked)}
+                className="h-3 w-3"
+              />
+              <span className="text-xs">Translation</span>
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={showOriginal}
+                onChange={(e) => setShowOriginal(e.target.checked)}
+                className="h-3 w-3"
+              />
+              <span className="text-xs">Original</span>
+            </label>
+          </div>
         </div>
 
         {/* TTS Controls */}
         <div className="flex items-center gap-3 pt-2 border-t border-gray-200">
           <button
             onClick={handlePlayPause}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+            className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors"
             title={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
@@ -158,7 +168,7 @@ export function Reader({ article, onReview, getCardIntervals }: ReaderProps) {
           {isPlaying && (
             <button
               onClick={handleStop}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors"
+              className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors"
               title="Stop"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -167,8 +177,8 @@ export function Reader({ article, onReview, getCardIntervals }: ReaderProps) {
             </button>
           )}
 
-          <div className="flex items-center gap-2 flex-1">
-            <span className="text-xs text-gray-500 w-10">{rate.toFixed(1)}x</span>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="text-xs text-gray-500 w-8 flex-shrink-0">{rate.toFixed(1)}x</span>
             <input
               type="range"
               min="0.5"
@@ -176,9 +186,9 @@ export function Reader({ article, onReview, getCardIntervals }: ReaderProps) {
               step="0.1"
               value={rate}
               onChange={(e) => setRate(parseFloat(e.target.value))}
-              className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              className="flex-1 min-w-0 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
             />
-            <span className="text-xs text-gray-400">Speed</span>
+            <span className="text-xs text-gray-400 flex-shrink-0">Speed</span>
           </div>
         </div>
       </div>
