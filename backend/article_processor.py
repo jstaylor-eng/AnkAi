@@ -7,6 +7,13 @@ from models import Word, Sentence, ProcessedArticle, VocabStatus
 from vocab_manager import VocabManager
 from llm_service import llm_service
 
+try:
+    import trafilatura
+    TRAFILATURA_AVAILABLE = True
+except ImportError:
+    TRAFILATURA_AVAILABLE = False
+    print("Warning: trafilatura not installed, using basic HTML extraction")
+
 
 def detect_language(text: str) -> str:
     """Detect if text is primarily Chinese or English"""
@@ -39,7 +46,7 @@ class ArticleProcessor:
                 jieba.add_word(word.hanzi)
 
     async def fetch_article(self, url: str) -> str:
-        """Fetch article text from URL"""
+        """Fetch article text from URL using trafilatura for clean extraction"""
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -58,8 +65,25 @@ class ArticleProcessor:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=headers, follow_redirects=True, timeout=30.0)
                 response.raise_for_status()
-                # Basic HTML text extraction
-                text = response.text
+                html = response.text
+
+                # Use trafilatura for clean article extraction if available
+                if TRAFILATURA_AVAILABLE:
+                    text = trafilatura.extract(
+                        html,
+                        include_comments=False,
+                        include_tables=False,
+                        no_fallback=False,
+                        favor_precision=True,  # Prefer precision over recall
+                        deduplicate=True,
+                    )
+                    if text:
+                        text = self._clean_extracted_text(text)
+                        if text:
+                            return text
+
+                # Fallback to basic extraction
+                text = html
                 # Remove script and style elements
                 text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
                 text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL)
@@ -67,11 +91,77 @@ class ArticleProcessor:
                 text = re.sub(r'<[^>]+>', ' ', text)
                 # Clean up whitespace
                 text = ' '.join(text.split())
-                return text
+                return self._clean_extracted_text(text)
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 403:
                 raise ValueError(f"This website blocks automated access. Please copy and paste the article text instead.")
             raise
+
+    def _clean_extracted_text(self, text: str) -> str:
+        """Clean extracted text by removing boilerplate and unwanted content"""
+        if not text:
+            return ""
+
+        # Lines to filter out (case-insensitive patterns)
+        boilerplate_patterns = [
+            r'this page requires javascript',
+            r'please enable javascript',
+            r'javascript is required',
+            r'your browser.*javascript',
+            r'cookies.*disabled',
+            r'please enable cookies',
+            r'subscribe to.*newsletter',
+            r'sign up for.*newsletter',
+            r'follow us on',
+            r'share this article',
+            r'share on facebook',
+            r'share on twitter',
+            r'related articles',
+            r'you may also like',
+            r'recommended for you',
+            r'advertisement',
+            r'sponsored content',
+            r'click here to',
+            r'read more:',
+            r'see also:',
+            r'image source',
+            r'image caption',
+            r'photo:',
+            r'credit:',
+            r'getty images',
+            r'reuters',
+            r'associated press',
+            r'copyright \d{4}',
+            r'all rights reserved',
+            r'terms of service',
+            r'privacy policy',
+            r'cookie policy',
+        ]
+
+        lines = text.split('\n')
+        cleaned_lines = []
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Skip very short lines (likely navigation/buttons)
+            if len(line) < 10:
+                continue
+
+            # Skip lines matching boilerplate patterns
+            line_lower = line.lower()
+            is_boilerplate = False
+            for pattern in boilerplate_patterns:
+                if re.search(pattern, line_lower):
+                    is_boilerplate = True
+                    break
+
+            if not is_boilerplate:
+                cleaned_lines.append(line)
+
+        return '\n'.join(cleaned_lines)
 
     def segment_text(self, text: str) -> list[str]:
         """Segment Chinese text into words using jieba"""

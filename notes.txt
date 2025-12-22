@@ -1,0 +1,1 @@
+vm access: ssh opc@130.162.167.220  
