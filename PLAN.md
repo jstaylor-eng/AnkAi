@@ -51,24 +51,34 @@ docker exec ankai-anki curl -s http://localhost:8765 -X POST -d '{"action": "ver
 docker restart ankai-anki
 ```
 
-### Completed Features (Phase 1)
+### Completed Features
 
+**Phase 1 - Article Reading:**
 - **Article Translation**: Paste text or URL, AI rewrites using user's known vocabulary
 - **English → Chinese Translation**: Automatically detects English articles and translates to learner-appropriate Chinese
-- **Clean Article Extraction**: Uses trafilatura to extract main article content, filters boilerplate text (image captions, JS warnings, etc.)
+- **Clean Article Extraction**: Uses trafilatura to extract main article content, filters boilerplate text
 - **Vocabulary Integration**: Loads vocabulary from selected Anki decks, classifies as NEW/DUE/LEARNED/UNKNOWN
-- **Reader Interface**: Du Chinese-inspired layout with:
-  - Tappable words showing pinyin and definition
-  - Color-coded vocabulary status (blue=new, orange=due)
-  - Toggle pinyin, translation, and original text
-  - Sticky stats bar (comprehension %, due/new counts) - stays visible when scrolling
-  - Mobile-responsive design with wrapping controls
-- **TTS Playback**: Edge TTS with adjustable speed (0.5x-1.0x), sentence-by-sentence or continuous
+- **Reader Interface**: Du Chinese-inspired layout with tappable words, pinyin, color-coded vocab status
+- **TTS Playback**: Browser Speech API with adjustable speed (0.5x-1.0x)
 - **Anki Review**: Tap words to review, submit ease ratings directly to Anki
-- **Cloud Deployment**: Running on Oracle Cloud Free Tier with Docker Compose
-  - Anki Desktop in Docker with AnkiConnect
-  - Caddy reverse proxy
-  - AnkiConnect addon properly configured
+
+**Phase 2 - Landing Page & Recall:**
+- **Landing Page Hub**: Central mode selection after deck selection with expandable card grid
+- **Recall Practice**: English → Chinese translation drills
+  - LLM generates sentences using user's vocabulary (10-20 characters)
+  - Reveal toggles: Chinese, Pinyin, Word Order (word-by-word English gloss)
+  - TTS audio playback with speed control
+  - Progress navigation with dots
+- **Extended Recall**: Generate longer passages with custom topic
+  - Optional topic/notes input for focused practice
+  - Target character count slider (30-150 characters for full passage)
+  - Displays using Reader component (word-by-word breakdown, pinyin, TTS)
+  - Collapsible English translation at bottom
+
+**Infrastructure:**
+- Cloud Deployment on Oracle Cloud Free Tier with Docker Compose
+- Anki Desktop in Docker with AnkiConnect
+- Caddy reverse proxy
 
 ### Tech Stack (Implemented)
 
@@ -92,34 +102,24 @@ docker restart ankai-anki
 
 ## Feature Backlog
 
-### Priority 1: Landing Page Redesign
-**Goal**: Create a central hub with multiple learning modes
+### Extended Recall RAG Enhancement
+**Goal**: Make generated passages more interesting with real-world context
 
-Current UX goes directly to deck selection → article input. Redesign to:
-```
-┌────────────────────────────────────────────────┐
-│                    AnkAi                        │
-│         Learn Chinese Your Way                  │
-├────────────────────────────────────────────────┤
-│                                                │
-│   ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│   │   📖     │  │   💬     │  │   🔄     │   │
-│   │  Read    │  │  Chat    │  │ Recall   │   │
-│   │ Articles │  │  with AI │  │ Practice │   │
-│   └──────────┘  └──────────┘  └──────────┘   │
-│                                                │
-│   Decks: HSK4, HSK5  •  1,234 words loaded    │
-│                                                │
-└────────────────────────────────────────────────┘
-```
+When user provides a topic, search the web for recent relevant information and include it as context for the LLM to generate more engaging, topical passages.
 
-**Implementation**:
-- New `LandingPage.tsx` component with 3 feature cards
-- Route to appropriate feature when card clicked
-- Keep deck selection accessible (settings/change decks button)
-- Show vocab stats summary at bottom
+**Implementation options**:
+- DuckDuckGo search (free, rate limited)
+- Tavily API (paid, reliable)
+- SerpAPI / Serper (paid)
 
-### Priority 2: Conversation Mode (Phase 2)
+**Backend changes**:
+- Add web search helper in `llm_service.py`
+- Include search snippets in passage generation prompt
+- LLM weaves real information into vocabulary-constrained Chinese
+
+---
+
+### Next Priority: Conversation Mode
 **Goal**: AI chat that uses the user's vocabulary
 
 Features:
@@ -140,14 +140,16 @@ Features:
 - Input field with send button
 - Same word popup/review mechanism as Reader
 
-### Priority 3: Recall Practice Mode (Phase 3)
-**Goal**: English → Chinese translation practice
+### Completed Features (moved from backlog)
 
-User sees English sentence, must recall the Chinese. Features:
-- Generate sentences using only words user should know (LEARNED + DUE)
-- Show English sentence first
-- Reveal options:
-  - Chinese characters
+~~**Landing Page Redesign**~~ ✅ Implemented
+- Central hub with expandable card grid
+- 4 modes: Read Articles, Recall Practice, Extended Recall, Chat (coming soon)
+- Vocab stats footer with deck info
+
+~~**Recall Practice Mode**~~ ✅ Implemented
+- English → Chinese translation practice
+- Reveal options: Chinese characters
   - Pinyin
   - English in Chinese word order (even if grammatically odd)
 - TTS to hear the Chinese

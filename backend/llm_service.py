@@ -537,5 +537,100 @@ Return ONLY a JSON array:
             raise RuntimeError(f"Failed to generate sentences: {e}")
 
 
+    async def generate_recall_passage(
+        self,
+        learned_vocab: list["Word"],
+        due_vocab: list["Word"],
+        new_vocab: list["Word"],
+        topic: str | None = None,
+        target_char_count: int = 50
+    ) -> dict:
+        """
+        Generate a Chinese passage for extended recall practice.
+        Returns passage text with English translation for display in Reader.
+
+        Args:
+            topic: Optional topic/notes for focused practice
+            target_char_count: Target total Chinese characters for the passage
+        """
+        if not self.is_available():
+            raise RuntimeError("LLM not available")
+
+        # Prepare vocabulary lists
+        learned_list = ", ".join([w.hanzi for w in learned_vocab[:400]])
+        due_list = ", ".join([w.hanzi for w in due_vocab[:30]])
+        new_list = ", ".join([w.hanzi for w in new_vocab[:5]])
+
+        # Basic vocab always available
+        basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 吃喝做说看听读写, 家人朋友老师学生"
+
+        # Calculate target range
+        min_chars = int(target_char_count * 0.85)
+        max_chars = int(target_char_count * 1.15)
+
+        # Topic guidance
+        if topic:
+            topic_guidance = f"TOPIC: Write about: {topic}"
+        else:
+            topic_guidance = "TOPIC: Write about daily life, an interesting experience, or a simple story"
+
+        prompt = f"""Generate a short Chinese passage for language practice. This should be natural text that a learner can read and understand.
+
+{topic_guidance}
+
+LENGTH: The passage should be {min_chars}-{max_chars} Chinese characters total (multiple sentences).
+
+VOCABULARY RULES:
+1. Use ONLY words from BASIC VOCABULARY and LEARNED VOCABULARY
+2. TRY to include some REVIEW WORDS naturally
+3. May include 1-2 NEW WORDS if they fit naturally
+4. Write natural, flowing text - not disconnected sentences
+
+BASIC VOCABULARY (always available):
+{basic_vocab}
+
+LEARNED VOCABULARY (use freely):
+{learned_list}
+
+REVIEW WORDS (try to include these):
+{due_list}
+
+NEW WORDS (may introduce):
+{new_list}
+
+Return ONLY a JSON object:
+{{
+  "chinese": "The full Chinese passage",
+  "english": "English translation of the passage",
+  "title": "A short title for the passage (in English, 2-5 words)"
+}}"""
+
+        try:
+            print(f"Generating recall passage (~{target_char_count} chars) with {len(learned_vocab)} learned words...")
+            content = await self._call_llm(prompt, max_tokens=1024)
+            result = self._parse_json_response(content)
+
+            if not isinstance(result, dict):
+                raise ValueError("Expected JSON object")
+
+            chinese = result.get("chinese", "")
+            english = result.get("english", "")
+            title = result.get("title", "Practice Passage")
+
+            print(f"Generated passage: {len(chinese)} Chinese chars, title: {title}")
+
+            return {
+                "chinese": chinese,
+                "english": english,
+                "title": title
+            }
+
+        except Exception as e:
+            print(f"Recall passage generation error: {e}")
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError(f"Failed to generate passage: {e}")
+
+
 # Global instance
 llm_service = LLMService()

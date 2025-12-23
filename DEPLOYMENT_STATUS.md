@@ -116,7 +116,26 @@ ssh opc@130.162.167.220 "docker exec ankai-anki curl -s http://localhost:8765 -X
 
 ---
 
-## Recent Changes (2025-12-22)
+## Recent Changes (2025-12-23)
+
+1. **Landing Page Hub** - New central hub after deck selection with feature cards:
+   - Read Articles (original feature)
+   - Recall Practice (new)
+   - Extended Recall (new)
+   - Chat with AI (coming soon)
+
+2. **Recall Practice Mode** - English → Chinese translation drills:
+   - LLM generates sentences using user's vocabulary (10-20 chars)
+   - Reveal toggles: Chinese, Pinyin, Word Order
+   - TTS audio playback with speed control
+   - Progress dots for navigation
+
+3. **Extended Recall Mode** - Custom topic and length:
+   - Optional topic/notes input for focused practice
+   - Target word count slider (10-50 characters, +/- 15%)
+   - Same reveal mechanics as basic Recall
+
+### Previous Changes (2025-12-22)
 
 1. **Article extraction improved** - Added `trafilatura` library for cleaner article text extraction, filters out boilerplate like "Image source", "This page requires JavaScript", etc.
 

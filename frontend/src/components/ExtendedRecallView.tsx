@@ -1,78 +1,55 @@
 import { useState } from 'react'
 import { useAnki } from '../hooks/useAnki'
-import { useTTS } from '../hooks/useTTS'
-import type { RecallSentence } from '../types'
+import { Reader } from './Reader'
+import type { ProcessedArticle } from '../types'
 
 interface ExtendedRecallViewProps {
   onBack: () => void
 }
 
-type ViewState = 'setup' | 'practice'
+type ViewState = 'setup' | 'reading'
 
 export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
-  const { generateRecallSentences, loading } = useAnki()
-  const { speakWord, rate, setRate } = useTTS()
+  const { generateRecallPassage, submitReview, getCardIntervals, loading } = useAnki()
 
   // Setup state
   const [viewState, setViewState] = useState<ViewState>('setup')
   const [topic, setTopic] = useState('')
-  const [targetWordCount, setTargetWordCount] = useState(25)
+  const [targetCharCount, setTargetCharCount] = useState(50)
 
-  // Practice state
-  const [sentences, setSentences] = useState<RecallSentence[]>([])
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [showChinese, setShowChinese] = useState(false)
-  const [showPinyin, setShowPinyin] = useState(false)
-  const [showWordOrder, setShowWordOrder] = useState(false)
+  // Reading state
+  const [article, setArticle] = useState<ProcessedArticle | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const loadSentences = async () => {
+  const loadPassage = async () => {
     setLoadError(null)
     try {
-      const result = await generateRecallSentences(
-        5,
+      const result = await generateRecallPassage(
         topic.trim() || undefined,
-        targetWordCount
+        targetCharCount
       )
-      setSentences(result.sentences)
-      setCurrentIndex(0)
-      setShowChinese(false)
-      setShowPinyin(false)
-      setShowWordOrder(false)
-      setViewState('practice')
+      setArticle(result)
+      setViewState('reading')
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Failed to load sentences')
+      setLoadError(err instanceof Error ? err.message : 'Failed to generate passage')
     }
   }
 
   const handleStart = () => {
-    loadSentences()
-  }
-
-  const currentSentence = sentences[currentIndex]
-
-  const handleNext = () => {
-    if (currentIndex < sentences.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-      setShowChinese(false)
-      setShowPinyin(false)
-      setShowWordOrder(false)
-    } else {
-      // Load more sentences with same settings
-      loadSentences()
-    }
-  }
-
-  const handlePlayAudio = () => {
-    if (currentSentence?.chinese) {
-      speakWord(currentSentence.chinese)
-    }
+    loadPassage()
   }
 
   const handleBackToSetup = () => {
     setViewState('setup')
-    setSentences([])
-    setCurrentIndex(0)
+    setArticle(null)
+  }
+
+  const handleReview = async (cardId: number, ease: number) => {
+    await submitReview(cardId, ease)
+  }
+
+  const handleGenerateMore = () => {
+    loadPassage()
   }
 
   // Setup screen
@@ -108,31 +85,31 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
                 className="w-full p-3 border rounded-lg text-sm"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Sentences will be focused on this topic
+                The passage will be focused on this topic
               </p>
             </div>
 
-            {/* Word count slider */}
+            {/* Character count slider */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Target Sentence Length: ~{targetWordCount} characters
+                Target Passage Length: ~{targetCharCount} characters
               </label>
               <input
                 type="range"
-                min="10"
-                max="50"
-                step="5"
-                value={targetWordCount}
-                onChange={(e) => setTargetWordCount(parseInt(e.target.value))}
+                min="30"
+                max="150"
+                step="10"
+                value={targetCharCount}
+                onChange={(e) => setTargetCharCount(parseInt(e.target.value))}
                 className="w-full"
               />
               <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>Short (10)</span>
-                <span>Medium (25)</span>
-                <span>Long (50)</span>
+                <span>Short (30)</span>
+                <span>Medium (90)</span>
+                <span>Long (150)</span>
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                Actual length will vary +/- 15%
+                Multiple sentences totaling this length (+/- 15%)
               </p>
             </div>
 
@@ -147,7 +124,7 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
               disabled={loading}
               className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
             >
-              {loading ? 'Generating...' : 'Start Practice'}
+              {loading ? 'Generating...' : 'Generate Passage'}
             </button>
           </div>
         </main>
@@ -155,12 +132,12 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
     )
   }
 
-  // Loading state (shouldn't normally show since we go to practice after load)
-  if (loading && sentences.length === 0) {
+  // Loading state (shouldn't normally show since we go to reading after load)
+  if (loading && !article) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-gray-500 mb-2">Generating practice sentences...</div>
+          <div className="text-gray-500 mb-2">Generating practice passage...</div>
           <div className="text-sm text-gray-400">
             {topic ? `Topic: ${topic}` : 'Using your vocabulary'}
           </div>
@@ -169,19 +146,19 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
     )
   }
 
-  if (!currentSentence) {
+  if (!article) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500">No sentences available</div>
+        <div className="text-gray-500">No passage available</div>
       </div>
     )
   }
 
-  // Practice screen
+  // Reading screen - uses Reader component
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-10">
+      <header className="border-b sticky top-0 bg-white z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-4">
           <button
             onClick={handleBackToSetup}
@@ -190,142 +167,41 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
             &larr; Settings
           </button>
           <div className="flex-1">
-            <h1 className="font-bold">Extended Recall</h1>
+            <h1 className="font-medium">{article.title || 'Practice Passage'}</h1>
             <p className="text-xs text-gray-500">
-              {currentIndex + 1} / {sentences.length}
-              {topic && ` | ${topic.slice(0, 30)}${topic.length > 30 ? '...' : ''}`}
-              {loading && ' (loading more...)'}
+              {topic && `Topic: ${topic.slice(0, 30)}${topic.length > 30 ? '...' : ''}`}
+              {loading && ' (generating more...)'}
             </p>
           </div>
+          <button
+            onClick={handleGenerateMore}
+            disabled={loading}
+            className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? 'Loading...' : 'New Passage'}
+          </button>
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="max-w-2xl mx-auto p-4">
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          {/* English prompt */}
-          <div className="mb-6">
-            <div className="text-sm text-gray-500 mb-2">Translate to Chinese:</div>
-            <div className="text-xl font-medium text-gray-900">
-              "{currentSentence.english}"
-            </div>
-          </div>
+      {/* Reader content */}
+      <main className="p-4">
+        <Reader
+          article={article}
+          onReview={handleReview}
+          getCardIntervals={getCardIntervals}
+        />
 
-          {/* Reveal toggles */}
-          <div className="flex flex-wrap gap-2 mb-6">
-            <button
-              onClick={() => setShowChinese(!showChinese)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                showChinese
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {showChinese ? 'Hide' : 'Show'} Chinese
-            </button>
-            <button
-              onClick={() => setShowPinyin(!showPinyin)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                showPinyin
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {showPinyin ? 'Hide' : 'Show'} Pinyin
-            </button>
-            <button
-              onClick={() => setShowWordOrder(!showWordOrder)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                showWordOrder
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {showWordOrder ? 'Hide' : 'Show'} Word Order
-            </button>
-          </div>
-
-          {/* Revealed content */}
-          <div className="space-y-4 mb-6">
-            {showChinese && (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="text-sm text-gray-500 mb-1">Chinese:</div>
-                <div className="text-2xl chinese-text">{currentSentence.chinese}</div>
-              </div>
-            )}
-            {showPinyin && (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="text-sm text-gray-500 mb-1">Pinyin:</div>
-                <div className="text-lg text-gray-700">{currentSentence.pinyin}</div>
-              </div>
-            )}
-            {showWordOrder && (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="text-sm text-gray-500 mb-1">Word Order:</div>
-                <div className="text-lg text-gray-600 italic">{currentSentence.word_order_english}</div>
-              </div>
-            )}
-          </div>
-
-          {/* Audio and navigation controls */}
-          <div className="flex items-center justify-between border-t pt-4">
-            <div className="flex items-center gap-4">
-              {/* Play audio button */}
-              <button
-                onClick={handlePlayAudio}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors"
-              >
-                <span className="text-lg">&#128266;</span>
-                <span className="text-sm">Play Audio</span>
-              </button>
-
-              {/* Speed control */}
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <span>{rate.toFixed(1)}x</span>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="1"
-                  step="0.1"
-                  value={rate}
-                  onChange={(e) => setRate(parseFloat(e.target.value))}
-                  className="w-20"
-                />
-              </div>
-            </div>
-
-            {/* Next button */}
-            <button
-              onClick={handleNext}
-              disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              {currentIndex < sentences.length - 1 ? 'Next' : 'More'}
-            </button>
-          </div>
-        </div>
-
-        {/* Progress dots */}
-        <div className="flex justify-center gap-2 mt-4">
-          {sentences.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => {
-                setCurrentIndex(idx)
-                setShowChinese(false)
-                setShowPinyin(false)
-                setShowWordOrder(false)
-              }}
-              className={`w-3 h-3 rounded-full transition-colors ${
-                idx === currentIndex
-                  ? 'bg-blue-600'
-                  : idx < currentIndex
-                  ? 'bg-blue-300'
-                  : 'bg-gray-300'
-              }`}
-            />
-          ))}
-        </div>
+        {/* English translation toggle (for generated passages) */}
+        {article.stats.english_translation && (
+          <details className="mt-6 bg-gray-50 rounded-lg p-4 max-w-2xl mx-auto">
+            <summary className="cursor-pointer text-sm text-gray-600 font-medium">
+              Show English Translation
+            </summary>
+            <p className="mt-3 text-gray-700 italic">
+              {article.stats.english_translation}
+            </p>
+          </details>
+        )}
       </main>
     </div>
   )

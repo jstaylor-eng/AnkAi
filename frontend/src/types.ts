@@ -28,6 +28,8 @@ export interface ProcessedArticle {
     due_count: number
     new_count: number
     unknown_count: number
+    english_translation?: string  // For generated passages
+    is_generated_passage?: boolean
   }
 }
 

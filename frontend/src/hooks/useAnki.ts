@@ -98,6 +98,19 @@ export function useAnki() {
     })
   }, [fetchApi])
 
+  const generateRecallPassage = useCallback(async (
+    topic?: string,
+    targetCharCount: number = 50
+  ): Promise<ProcessedArticle> => {
+    return fetchApi<ProcessedArticle>('/recall/generate-passage', {
+      method: 'POST',
+      body: JSON.stringify({
+        topic: topic || null,
+        target_char_count: targetCharCount
+      }),
+    })
+  }, [fetchApi])
+
   return {
     loading,
     error,
@@ -109,5 +122,6 @@ export function useAnki() {
     triggerSync,
     getCardIntervals,
     generateRecallSentences,
+    generateRecallPassage,
   }
 }

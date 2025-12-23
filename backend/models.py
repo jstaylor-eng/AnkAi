@@ -78,3 +78,8 @@ class RecallGenerateRequest(BaseModel):
 class RecallGenerateResponse(BaseModel):
     sentences: list[RecallSentence]
     stats: dict
+
+
+class RecallPassageRequest(BaseModel):
+    topic: Optional[str] = None             # Optional topic/notes for focused practice
+    target_char_count: int = 50             # Target total Chinese characters for passage

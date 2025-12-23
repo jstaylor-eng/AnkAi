@@ -9,7 +9,8 @@ import anki_client
 from models import (
     DeckSelection, ArticleRequest, ReviewRequest,
     ProcessedArticle, Word, VocabStatus,
-    RecallGenerateRequest, RecallGenerateResponse
+    RecallGenerateRequest, RecallGenerateResponse,
+    RecallPassageRequest
 )
 from llm_service import llm_service
 from vocab_manager import VocabManager
@@ -496,6 +497,57 @@ async def generate_recall_sentences(request: RecallGenerateRequest) -> RecallGen
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate sentences: {e}")
+
+
+@app.post("/api/recall/generate-passage")
+async def generate_recall_passage(request: RecallPassageRequest) -> ProcessedArticle:
+    """Generate a passage for extended recall practice, returned as ProcessedArticle for Reader display"""
+    try:
+        learned = vocab_manager.get_words_by_status(VocabStatus.LEARNED)
+        due = vocab_manager.get_words_by_status(VocabStatus.DUE)
+        new = vocab_manager.get_words_by_status(VocabStatus.NEW)
+
+        if not learned and not due:
+            raise HTTPException(
+                status_code=400,
+                detail="No vocabulary loaded. Please select decks first."
+            )
+
+        # Generate the passage with LLM
+        passage_result = await llm_service.generate_recall_passage(
+            learned_vocab=learned,
+            due_vocab=due,
+            new_vocab=new,
+            topic=request.topic,
+            target_char_count=request.target_char_count
+        )
+
+        # Process the Chinese text through ArticleProcessor for word segmentation
+        if not article_processor:
+            raise HTTPException(status_code=500, detail="Article processor not initialized")
+
+        # Process as Chinese text (no rewriting needed since LLM already used our vocab)
+        result = await article_processor.process_article(
+            text=passage_result["chinese"],
+            rewrite=False,
+            source_lang="zh"
+        )
+
+        # Set the title from LLM
+        result.title = passage_result.get("title", "Practice Passage")
+
+        # Add English translation to each sentence
+        # The passage is already one coherent text, but we'll add the full translation
+        # to the stats for display purposes
+        result.stats["english_translation"] = passage_result.get("english", "")
+        result.stats["is_generated_passage"] = True
+
+        return result
+
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate passage: {e}")
 
 
 # Review operations
