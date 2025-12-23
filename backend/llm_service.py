@@ -537,6 +537,91 @@ Return ONLY a JSON array:
             raise RuntimeError(f"Failed to generate sentences: {e}")
 
 
+    async def generate_chat_response(
+        self,
+        user_message: str,
+        conversation_history: list[dict],
+        learned_vocab: list["Word"],
+        due_vocab: list["Word"],
+        new_vocab: list["Word"],
+        max_new_words: int = 2
+    ) -> dict:
+        """
+        Generate conversational response using user's vocabulary.
+        Returns: { chinese, translation }
+        """
+        if not self.is_available():
+            raise RuntimeError("LLM not available")
+
+        # Prepare vocabulary lists
+        learned_list = ", ".join([w.hanzi for w in learned_vocab[:400]])
+        due_list = ", ".join([w.hanzi for w in due_vocab[:30]])
+        new_list = ", ".join([w.hanzi for w in new_vocab[:max_new_words * 2]])
+
+        # Basic vocab always available
+        basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 吃喝做说看听读写, 家人朋友老师学生, 知道觉得喜欢希望"
+
+        # Format conversation history
+        history_text = ""
+        if conversation_history:
+            for msg in conversation_history[-10:]:  # Last 10 messages for context
+                role_label = "User" if msg.get("role") == "user" else "Assistant"
+                history_text += f"{role_label}: {msg.get('text', '')}\n"
+
+        prompt = f"""You are a friendly Chinese language tutor having a conversation with a learner.
+
+VOCABULARY RULES (STRICT - FOLLOW EXACTLY):
+1. Use ONLY words from BASIC VOCABULARY and LEARNED VOCABULARY for all grammar and common words
+2. TRY to naturally include 1-2 REVIEW WORDS in your response - these are words the student needs to practice
+3. May introduce up to {max_new_words} NEW WORDS if contextually necessary
+4. Proper nouns (names, places, brands) may be used when the conversation requires them
+5. Keep responses conversational and natural (1-3 sentences)
+6. Respond in a helpful, encouraging way
+
+BASIC VOCABULARY (always safe to use):
+{basic_vocab}
+
+LEARNED VOCABULARY (student knows these - use freely):
+{learned_list}
+
+REVIEW WORDS (prioritize including these naturally):
+{due_list}
+
+NEW WORDS (may introduce up to {max_new_words}):
+{new_list}
+
+CONVERSATION HISTORY:
+{history_text if history_text else "(This is the start of the conversation)"}
+
+USER MESSAGE: {user_message}
+
+Respond naturally as a tutor would. Return ONLY a JSON object:
+{{"chinese": "你的中文回复", "translation": "English translation of your response"}}"""
+
+        try:
+            print(f"Generating chat response with {len(learned_vocab)} learned words, {len(due_vocab)} due words...")
+            content = await self._call_llm(prompt, max_tokens=512)
+            result = self._parse_json_response(content)
+
+            if not isinstance(result, dict):
+                raise ValueError("Expected JSON object")
+
+            chinese = result.get("chinese", "")
+            translation = result.get("translation", "")
+
+            print(f"Generated chat response: {chinese[:50]}...")
+
+            return {
+                "chinese": chinese,
+                "translation": translation
+            }
+
+        except Exception as e:
+            print(f"Chat response generation error: {e}")
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError(f"Failed to generate response: {e}")
+
     async def generate_recall_passage(
         self,
         learned_vocab: list["Word"],

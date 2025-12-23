@@ -5,9 +5,10 @@ import { LandingPage } from './components/LandingPage'
 import { Reader } from './components/Reader'
 import { RecallView } from './components/RecallView'
 import { ExtendedRecallView } from './components/ExtendedRecallView'
+import { ChatView } from './components/ChatView'
 import type { ProcessedArticle, VocabStats } from './types'
 
-type AppState = 'loading' | 'error' | 'select-decks' | 'landing' | 'ready' | 'processing' | 'reading' | 'recall' | 'extended-recall'
+type AppState = 'loading' | 'error' | 'select-decks' | 'landing' | 'ready' | 'processing' | 'reading' | 'recall' | 'extended-recall' | 'chat'
 
 function App() {
   const [state, setState] = useState<AppState>('loading')
@@ -60,8 +61,9 @@ function App() {
       setState('recall')
     } else if (mode === 'extended-recall') {
       setState('extended-recall')
+    } else if (mode === 'chat') {
+      setState('chat')
     }
-    // Future modes (chat) will be handled here
   }
 
   const handleProcessArticle = async () => {
@@ -167,6 +169,11 @@ function App() {
   // Extended recall practice view
   if (state === 'extended-recall') {
     return <ExtendedRecallView onBack={() => setState('landing')} />
+  }
+
+  // Chat view
+  if (state === 'chat') {
+    return <ChatView onBack={() => setState('landing')} />
   }
 
   // Reading view

@@ -46,3 +46,10 @@ export interface RecallSentence {
   pinyin: string
   word_order_english: string
 }
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  text: string
+  words: Word[]
+  translation?: string
+}

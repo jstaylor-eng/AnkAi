@@ -130,10 +130,20 @@ ssh opc@130.162.167.220 "docker exec ankai-anki curl -s http://localhost:8765 -X
    - TTS audio playback with speed control
    - Progress dots for navigation
 
-3. **Extended Recall Mode** - Custom topic and length:
+3. **Extended Recall Mode** - Generate passages on custom topics:
    - Optional topic/notes input for focused practice
-   - Target word count slider (10-50 characters, +/- 15%)
-   - Same reveal mechanics as basic Recall
+   - Target character count slider (30-150 chars for full passage)
+   - Displays using Reader component (word-by-word breakdown, pinyin, TTS)
+   - Collapsible English translation
+   - "New Passage" button to regenerate
+
+4. **Chat with AI** - WhatsApp-style conversation practice:
+   - User types in Chinese, AI responds using user's vocabulary
+   - AI prioritizes including "due" words naturally
+   - AI messages show word-by-word breakdown with pinyin
+   - Tappable words show definitions and Anki review buttons
+   - Toggle pinyin and translation display
+   - TTS playback for AI messages
 
 ### Previous Changes (2025-12-22)
 

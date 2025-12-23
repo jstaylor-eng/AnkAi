@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import type { ProcessedArticle, VocabStats, RecallSentence } from '../types'
+import type { ProcessedArticle, VocabStats, RecallSentence, ChatMessage } from '../types'
 
 const API_BASE = '/api'
 
@@ -111,6 +111,19 @@ export function useAnki() {
     })
   }, [fetchApi])
 
+  const sendChatMessage = useCallback(async (
+    message: string,
+    history: Array<{ role: string; text: string }>
+  ) => {
+    return fetchApi<{
+      user_message: ChatMessage
+      ai_message: ChatMessage
+    }>('/chat/send', {
+      method: 'POST',
+      body: JSON.stringify({ message, history }),
+    })
+  }, [fetchApi])
+
   return {
     loading,
     error,
@@ -123,5 +136,6 @@ export function useAnki() {
     getCardIntervals,
     generateRecallSentences,
     generateRecallPassage,
+    sendChatMessage,
   }
 }

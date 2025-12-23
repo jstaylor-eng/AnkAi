@@ -83,3 +83,21 @@ class RecallGenerateResponse(BaseModel):
 class RecallPassageRequest(BaseModel):
     topic: Optional[str] = None             # Optional topic/notes for focused practice
     target_char_count: int = 50             # Target total Chinese characters for passage
+
+
+class ChatMessageModel(BaseModel):
+    role: str                               # "user" or "assistant"
+    text: str                               # Original text
+    words: list[Word]                       # Segmented words with status
+    translation: Optional[str] = None       # English translation (AI messages only)
+
+
+class ChatRequest(BaseModel):
+    message: str                            # User's message
+    history: list[dict] = []                # Previous messages for context [{role, text}]
+    max_new_words: int = 2                  # Max new words to introduce per response
+
+
+class ChatResponse(BaseModel):
+    user_message: ChatMessageModel          # Processed user message
+    ai_message: ChatMessageModel            # AI response with words

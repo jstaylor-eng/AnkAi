@@ -75,6 +75,15 @@ docker restart ankai-anki
   - Displays using Reader component (word-by-word breakdown, pinyin, TTS)
   - Collapsible English translation at bottom
 
+**Phase 3 - Chat:**
+- **Chat with AI**: WhatsApp-style conversation practice
+  - User types in Chinese, AI responds using learned vocabulary
+  - AI prioritizes including "due" words naturally in responses
+  - AI messages show word-by-word breakdown with pinyin
+  - Tappable words show definitions and Anki review buttons (reuses WordPopup)
+  - Toggle pinyin/translation display
+  - TTS playback for AI messages
+
 **Infrastructure:**
 - Cloud Deployment on Oracle Cloud Free Tier with Docker Compose
 - Anki Desktop in Docker with AnkiConnect
@@ -119,32 +128,17 @@ When user provides a topic, search the web for recent relevant information and i
 
 ---
 
-### Next Priority: Conversation Mode
-**Goal**: AI chat that uses the user's vocabulary
-
-Features:
-- Chat interface for conversational practice
-- AI uses LEARNED vocabulary, introduces DUE/NEW words naturally
-- Each AI message shows Chinese with pinyin (tappable words)
-- User can respond in Chinese or English
-- Words can be reviewed mid-conversation
-
-**Backend**:
-- New `/api/chat` endpoint
-- Maintains conversation context
-- LLM prompt includes vocabulary constraints
-
-**Frontend**:
-- `ChatView.tsx` component
-- Message bubbles with word highlighting
-- Input field with send button
-- Same word popup/review mechanism as Reader
-
 ### Completed Features (moved from backlog)
+
+~~**Conversation Mode**~~ ✅ Implemented
+- WhatsApp-style chat interface
+- AI uses LEARNED vocabulary, includes DUE words naturally
+- AI messages show Chinese with pinyin (tappable words)
+- Word popup for definitions and Anki review
 
 ~~**Landing Page Redesign**~~ ✅ Implemented
 - Central hub with expandable card grid
-- 4 modes: Read Articles, Recall Practice, Extended Recall, Chat (coming soon)
+- 4 modes: Read Articles, Recall Practice, Extended Recall, Chat with AI
 - Vocab stats footer with deck info
 
 ~~**Recall Practice Mode**~~ ✅ Implemented

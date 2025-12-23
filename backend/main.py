@@ -10,7 +10,8 @@ from models import (
     DeckSelection, ArticleRequest, ReviewRequest,
     ProcessedArticle, Word, VocabStatus,
     RecallGenerateRequest, RecallGenerateResponse,
-    RecallPassageRequest
+    RecallPassageRequest,
+    ChatRequest, ChatResponse, ChatMessageModel
 )
 from llm_service import llm_service
 from vocab_manager import VocabManager
@@ -548,6 +549,65 @@ async def generate_recall_passage(request: RecallPassageRequest) -> ProcessedArt
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate passage: {e}")
+
+
+# Chat operations
+
+@app.post("/api/chat/send")
+async def chat_send(request: ChatRequest) -> ChatResponse:
+    """Process user message and generate AI response"""
+    try:
+        if not article_processor:
+            raise HTTPException(status_code=500, detail="Article processor not initialized")
+
+        # Get vocabulary lists
+        learned = vocab_manager.get_words_by_status(VocabStatus.LEARNED)
+        due = vocab_manager.get_words_by_status(VocabStatus.DUE)
+        new = vocab_manager.get_words_by_status(VocabStatus.NEW)
+
+        if not learned and not due:
+            raise HTTPException(
+                status_code=400,
+                detail="No vocabulary loaded. Please select decks first."
+            )
+
+        # Segment and classify user's message
+        user_segments = article_processor.segment_text(request.message)
+        user_words = article_processor.classify_segments(user_segments)
+
+        # Generate AI response
+        ai_result = await llm_service.generate_chat_response(
+            user_message=request.message,
+            conversation_history=request.history,
+            learned_vocab=learned,
+            due_vocab=due,
+            new_vocab=new,
+            max_new_words=request.max_new_words
+        )
+
+        # Segment and classify AI response
+        ai_segments = article_processor.segment_text(ai_result["chinese"])
+        ai_words = article_processor.classify_segments(ai_segments)
+
+        return ChatResponse(
+            user_message=ChatMessageModel(
+                role="user",
+                text=request.message,
+                words=user_words,
+                translation=None
+            ),
+            ai_message=ChatMessageModel(
+                role="assistant",
+                text=ai_result["chinese"],
+                words=ai_words,
+                translation=ai_result["translation"]
+            )
+        )
+
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send message: {e}")
 
 
 # Review operations
