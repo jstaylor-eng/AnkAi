@@ -3,9 +3,10 @@ import { useAnki } from './hooks/useAnki'
 import { DeckSelector } from './components/DeckSelector'
 import { LandingPage } from './components/LandingPage'
 import { Reader } from './components/Reader'
+import { RecallView } from './components/RecallView'
 import type { ProcessedArticle, VocabStats } from './types'
 
-type AppState = 'loading' | 'error' | 'select-decks' | 'landing' | 'ready' | 'processing' | 'reading'
+type AppState = 'loading' | 'error' | 'select-decks' | 'landing' | 'ready' | 'processing' | 'reading' | 'recall'
 
 function App() {
   const [state, setState] = useState<AppState>('loading')
@@ -54,8 +55,10 @@ function App() {
   const handleModeSelect = (mode: string) => {
     if (mode === 'read') {
       setState('ready')
+    } else if (mode === 'recall') {
+      setState('recall')
     }
-    // Future modes (chat, recall) will be handled here
+    // Future modes (chat) will be handled here
   }
 
   const handleProcessArticle = async () => {
@@ -151,6 +154,11 @@ function App() {
         onSync={handleSync}
       />
     )
+  }
+
+  // Recall practice view
+  if (state === 'recall') {
+    return <RecallView onBack={() => setState('landing')} />
   }
 
   // Reading view

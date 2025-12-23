@@ -145,6 +145,10 @@ class VocabManager:
         if not card_ids:
             return stats
 
+        # Get due status for all cards at once (more accurate than queue-based check)
+        due_status = await anki_client.are_due(card_ids)
+        due_set = {card_ids[i] for i, is_due in enumerate(due_status) if is_due}
+
         # Get card info in batches
         batch_size = 100
         for i in range(0, len(card_ids), batch_size):
@@ -152,7 +156,9 @@ class VocabManager:
             cards_info = await anki_client.get_cards_info(batch)
 
             for card_info in cards_info:
-                word = self._extract_word_from_card(card_info, deck_name)
+                card_id = card_info.get("cardId")
+                is_due = card_id in due_set
+                word = self._extract_word_from_card(card_info, deck_name, is_due)
                 if word and word.hanzi:
                     # Don't overwrite if we already have this word with better status
                     if word.hanzi not in self.vocab:
@@ -167,7 +173,7 @@ class VocabManager:
 
         return stats
 
-    def _extract_word_from_card(self, card_info: dict, deck_name: str) -> Word | None:
+    def _extract_word_from_card(self, card_info: dict, deck_name: str, is_due: bool = False) -> Word | None:
         """Extract a Word from card info, detecting field mappings"""
         fields = card_info.get("fields", {})
 
@@ -200,16 +206,16 @@ class VocabManager:
         ])
         definition = self._clean_text(definition) if definition else ""
 
-        # Determine status from card queue
+        # Determine status from card queue and due status
         queue = card_info.get("queue", 0)
-        due = card_info.get("due", 0)
-        interval = card_info.get("interval", 0)
 
-        if queue == 0:  # New
+        if queue == 0:  # New card (never seen)
             status = VocabStatus.NEW
-        elif queue in (1, 3) or (queue == 2 and due <= 0):  # Learning, relearning, or due
+        elif queue in (1, 3):  # Learning or relearning queue
             status = VocabStatus.DUE
-        else:  # Review queue with future due date
+        elif is_due:  # Review card that is due today (from areDue API)
+            status = VocabStatus.DUE
+        else:  # Review card not yet due
             status = VocabStatus.LEARNED
 
         return Word(
@@ -322,17 +328,21 @@ class VocabManager:
     async def refresh_card_status(self, card_id: int) -> None:
         """Refresh the status of a specific card after review"""
         cards_info = await anki_client.get_cards_info([card_id])
+        due_status = await anki_client.are_due([card_id])
+        is_due = due_status[0] if due_status else False
+
         if cards_info:
             card_info = cards_info[0]
             # Find and update the word
             for word in self.vocab.values():
                 if word.card_id == card_id:
-                    # Update status based on new queue
+                    # Update status based on queue and due status
                     queue = card_info.get("queue", 0)
-                    due = card_info.get("due", 0)
                     if queue == 0:
                         word.status = VocabStatus.NEW
-                    elif queue in (1, 3) or (queue == 2 and due <= 0):
+                    elif queue in (1, 3):  # Learning or relearning
+                        word.status = VocabStatus.DUE
+                    elif is_due:  # Review card that is due
                         word.status = VocabStatus.DUE
                     else:
                         word.status = VocabStatus.LEARNED

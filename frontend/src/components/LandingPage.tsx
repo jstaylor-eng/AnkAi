@@ -11,7 +11,7 @@ interface FeatureCard {
 const FEATURE_CARDS: FeatureCard[] = [
   { id: 'read', title: 'Read Articles', description: 'Practice with news & stories', icon: '📖', enabled: true },
   { id: 'chat', title: 'Chat with AI', description: 'Conversation practice', icon: '💬', enabled: false },
-  { id: 'recall', title: 'Recall Practice', description: 'English → Chinese drills', icon: '🔄', enabled: false },
+  { id: 'recall', title: 'Recall Practice', description: 'English → Chinese drills', icon: '🔄', enabled: true },
 ]
 
 interface LandingPageProps {

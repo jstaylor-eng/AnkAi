@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import type { ProcessedArticle, VocabStats } from '../types'
+import type { ProcessedArticle, VocabStats, RecallSentence } from '../types'
 
 const API_BASE = '/api'
 
@@ -80,6 +80,16 @@ export function useAnki() {
     }>(`/card/${cardId}/intervals`)
   }, [fetchApi])
 
+  const generateRecallSentences = useCallback(async (count: number = 5) => {
+    return fetchApi<{
+      sentences: RecallSentence[]
+      stats: { total_generated: number; due_words_available: number; new_words_available: number }
+    }>('/recall/generate', {
+      method: 'POST',
+      body: JSON.stringify({ count }),
+    })
+  }, [fetchApi])
+
   return {
     loading,
     error,
@@ -90,5 +100,6 @@ export function useAnki() {
     submitReview,
     triggerSync,
     getCardIntervals,
+    generateRecallSentences,
   }
 }

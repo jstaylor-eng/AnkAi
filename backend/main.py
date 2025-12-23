@@ -8,8 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import anki_client
 from models import (
     DeckSelection, ArticleRequest, ReviewRequest,
-    ProcessedArticle, Word, VocabStatus
+    ProcessedArticle, Word, VocabStatus,
+    RecallGenerateRequest, RecallGenerateResponse
 )
+from llm_service import llm_service
 from vocab_manager import VocabManager
 from article_processor import ArticleProcessor
 
@@ -459,6 +461,39 @@ async def process_article(request: ArticleRequest) -> ProcessedArticle:
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Recall practice
+
+@app.post("/api/recall/generate")
+async def generate_recall_sentences(request: RecallGenerateRequest) -> RecallGenerateResponse:
+    """Generate sentences for recall practice using user's vocabulary"""
+    try:
+        learned = vocab_manager.get_words_by_status(VocabStatus.LEARNED)
+        due = vocab_manager.get_words_by_status(VocabStatus.DUE)
+        new = vocab_manager.get_words_by_status(VocabStatus.NEW)
+
+        if not learned and not due:
+            raise HTTPException(
+                status_code=400,
+                detail="No vocabulary loaded. Please select decks first."
+            )
+
+        result = await llm_service.generate_recall_sentences(
+            count=request.count,
+            learned_vocab=learned,
+            due_vocab=due,
+            new_vocab=new
+        )
+
+        return RecallGenerateResponse(
+            sentences=result["sentences"],
+            stats=result["stats"]
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate sentences: {e}")
 
 
 # Review operations

@@ -37,3 +37,10 @@ export interface VocabStats {
   due: number
   learned: number
 }
+
+export interface RecallSentence {
+  english: string
+  chinese: string
+  pinyin: string
+  word_order_english: string
+}

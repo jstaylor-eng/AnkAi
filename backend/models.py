@@ -60,3 +60,19 @@ class CardInfo(BaseModel):
     due: int
     queue: int  # -1=suspended, 0=new, 1=learning, 2=review, 3=relearning
     status: VocabStatus
+
+
+class RecallSentence(BaseModel):
+    english: str              # English sentence to translate
+    chinese: str              # Chinese answer
+    pinyin: str               # Pinyin pronunciation
+    word_order_english: str   # Word-by-word gloss
+
+
+class RecallGenerateRequest(BaseModel):
+    count: int = 5            # Number of sentences to generate
+
+
+class RecallGenerateResponse(BaseModel):
+    sentences: list[RecallSentence]
+    stats: dict

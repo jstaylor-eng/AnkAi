@@ -430,6 +430,92 @@ Respond in JSON format:
             print(f"Word explanation error: {e}")
             return {"explanation": "", "examples": []}
 
+    async def generate_recall_sentences(
+        self,
+        count: int,
+        learned_vocab: list["Word"],
+        due_vocab: list["Word"],
+        new_vocab: list["Word"]
+    ) -> dict:
+        """
+        Generate sentences for recall practice using the user's vocabulary.
+        Returns sentences with English, Chinese, pinyin, and word-order English.
+        """
+        if not self.is_available():
+            raise RuntimeError("LLM not available")
+
+        # Prepare vocabulary lists
+        learned_list = ", ".join([w.hanzi for w in learned_vocab[:400]])
+        due_list = ", ".join([w.hanzi for w in due_vocab[:30]])
+        new_list = ", ".join([w.hanzi for w in new_vocab[:5]])
+
+        # Basic vocab always available
+        basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 吃喝做说看听读写, 家人朋友老师学生"
+
+        prompt = f"""Generate {count} natural Chinese sentences for language practice. These should be everyday sentences a learner can translate from English to Chinese.
+
+VOCABULARY RULES:
+1. Use ONLY words from BASIC VOCABULARY and LEARNED VOCABULARY
+2. MUST include at least one REVIEW WORD in each sentence where natural
+3. May include one NEW WORD per 2-3 sentences if it fits naturally
+4. Each sentence should be 5-12 Chinese characters long
+5. Topics: daily life, food, travel, hobbies, weather, family, work, study
+
+BASIC VOCABULARY (always available):
+{basic_vocab}
+
+LEARNED VOCABULARY (use freely):
+{learned_list}
+
+REVIEW WORDS (prioritize including these):
+{due_list}
+
+NEW WORDS (may introduce):
+{new_list}
+
+For each sentence, provide:
+- "english": Natural English sentence
+- "chinese": Chinese translation using only allowed vocabulary
+- "pinyin": Pinyin with tone marks (e.g., "Wǒ xiǎng chī fàn")
+- "word_order_english": Word-by-word English gloss in Chinese word order (e.g., "I want eat rice")
+
+Return ONLY a JSON array:
+[{{"english": "...", "chinese": "...", "pinyin": "...", "word_order_english": "..."}}]"""
+
+        try:
+            print(f"Generating {count} recall sentences with {len(learned_vocab)} learned words, {len(due_vocab)} due words...")
+            content = await self._call_llm(prompt, max_tokens=2048)
+            result = self._parse_json_response(content)
+
+            if not isinstance(result, list):
+                raise ValueError("Expected JSON array")
+
+            # Validate and clean results
+            sentences = []
+            for item in result[:count]:
+                sentences.append({
+                    "english": item.get("english", ""),
+                    "chinese": item.get("chinese", ""),
+                    "pinyin": item.get("pinyin", ""),
+                    "word_order_english": item.get("word_order_english", "")
+                })
+
+            print(f"Generated {len(sentences)} recall sentences")
+            return {
+                "sentences": sentences,
+                "stats": {
+                    "total_generated": len(sentences),
+                    "due_words_available": len(due_vocab),
+                    "new_words_available": len(new_vocab)
+                }
+            }
+
+        except Exception as e:
+            print(f"Recall sentence generation error: {e}")
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError(f"Failed to generate sentences: {e}")
+
 
 # Global instance
 llm_service = LLMService()
