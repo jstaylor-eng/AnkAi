@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import type { VocabStats } from '../types'
 
 interface DeckSelectorProps {
-  onDecksSelected: (stats: VocabStats) => void
+  onDecksSelected: (deckNames: string[], stats: VocabStats) => void
   getDecks: () => Promise<string[]>
   selectDecks: (deckNames: string[]) => Promise<{ selected: string[]; stats: VocabStats }>
 }
@@ -44,7 +44,7 @@ export function DeckSelector({ onDecksSelected, getDecks, selectDecks }: DeckSel
     try {
       setLoading(true)
       const result = await selectDecks(Array.from(selected))
-      onDecksSelected(result.stats)
+      onDecksSelected(result.selected, result.stats)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to select decks')
     } finally {

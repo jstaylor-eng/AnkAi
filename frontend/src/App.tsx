@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useAnki } from './hooks/useAnki'
 import { DeckSelector } from './components/DeckSelector'
+import { LandingPage } from './components/LandingPage'
 import { Reader } from './components/Reader'
 import type { ProcessedArticle, VocabStats } from './types'
 
-type AppState = 'loading' | 'error' | 'select-decks' | 'ready' | 'processing' | 'reading'
+type AppState = 'loading' | 'error' | 'select-decks' | 'landing' | 'ready' | 'processing' | 'reading'
 
 function App() {
   const [state, setState] = useState<AppState>('loading')
   const [vocabStats, setVocabStats] = useState<VocabStats | null>(null)
+  const [selectedDecks, setSelectedDecks] = useState<string[]>([])
   const [article, setArticle] = useState<ProcessedArticle | null>(null)
   const [inputUrl, setInputUrl] = useState('')
   const [inputText, setInputText] = useState('')
@@ -43,9 +45,17 @@ function App() {
     }
   }
 
-  const handleDecksSelected = (stats: VocabStats) => {
+  const handleDecksSelected = (deckNames: string[], stats: VocabStats) => {
+    setSelectedDecks(deckNames)
     setVocabStats(stats)
-    setState('ready')
+    setState('landing')
+  }
+
+  const handleModeSelect = (mode: string) => {
+    if (mode === 'read') {
+      setState('ready')
+    }
+    // Future modes (chat, recall) will be handled here
   }
 
   const handleProcessArticle = async () => {
@@ -68,7 +78,7 @@ function App() {
 
   const handleBack = () => {
     setArticle(null)
-    setState('ready')
+    setState('landing')
   }
 
   const handleSync = async () => {
@@ -130,6 +140,19 @@ function App() {
     )
   }
 
+  // Landing page (mode selection hub)
+  if (state === 'landing' && vocabStats) {
+    return (
+      <LandingPage
+        vocabStats={vocabStats}
+        selectedDecks={selectedDecks}
+        onSelectMode={handleModeSelect}
+        onChangeDecks={() => setState('select-decks')}
+        onSync={handleSync}
+      />
+    )
+  }
+
   // Reading view
   if (state === 'reading' && article) {
     return (
@@ -156,29 +179,21 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="font-bold">AnkAi</h1>
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-4">
+          <button
+            onClick={() => setState('landing')}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            &larr; Back
+          </button>
+          <div className="flex-1">
+            <h1 className="font-bold">Read Articles</h1>
             {vocabStats && (
               <p className="text-xs text-gray-500">
                 {vocabStats.total} words loaded
                 ({vocabStats.due} due, {vocabStats.new} new)
               </p>
             )}
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleSync}
-              className="text-sm text-gray-600 hover:text-gray-800"
-            >
-              Sync
-            </button>
-            <button
-              onClick={() => setState('select-decks')}
-              className="text-sm text-blue-600 hover:text-blue-800"
-            >
-              Change Decks
-            </button>
           </div>
         </div>
       </header>
