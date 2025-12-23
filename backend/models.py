@@ -70,7 +70,9 @@ class RecallSentence(BaseModel):
 
 
 class RecallGenerateRequest(BaseModel):
-    count: int = 5            # Number of sentences to generate
+    count: int = 5                          # Number of sentences to generate
+    topic: Optional[str] = None             # Optional topic/notes for focused practice
+    target_word_count: Optional[int] = None # Target Chinese character count per sentence
 
 
 class RecallGenerateResponse(BaseModel):

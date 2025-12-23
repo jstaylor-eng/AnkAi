@@ -483,7 +483,9 @@ async def generate_recall_sentences(request: RecallGenerateRequest) -> RecallGen
             count=request.count,
             learned_vocab=learned,
             due_vocab=due,
-            new_vocab=new
+            new_vocab=new,
+            topic=request.topic,
+            target_word_count=request.target_word_count
         )
 
         return RecallGenerateResponse(

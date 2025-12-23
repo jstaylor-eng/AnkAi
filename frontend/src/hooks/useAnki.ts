@@ -80,13 +80,21 @@ export function useAnki() {
     }>(`/card/${cardId}/intervals`)
   }, [fetchApi])
 
-  const generateRecallSentences = useCallback(async (count: number = 5) => {
+  const generateRecallSentences = useCallback(async (
+    count: number = 5,
+    topic?: string,
+    targetWordCount?: number
+  ) => {
     return fetchApi<{
       sentences: RecallSentence[]
       stats: { total_generated: number; due_words_available: number; new_words_available: number }
     }>('/recall/generate', {
       method: 'POST',
-      body: JSON.stringify({ count }),
+      body: JSON.stringify({
+        count,
+        topic: topic || null,
+        target_word_count: targetWordCount || null
+      }),
     })
   }, [fetchApi])
 

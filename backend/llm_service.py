@@ -435,11 +435,17 @@ Respond in JSON format:
         count: int,
         learned_vocab: list["Word"],
         due_vocab: list["Word"],
-        new_vocab: list["Word"]
+        new_vocab: list["Word"],
+        topic: str | None = None,
+        target_word_count: int | None = None
     ) -> dict:
         """
         Generate sentences for recall practice using the user's vocabulary.
         Returns sentences with English, Chinese, pinyin, and word-order English.
+
+        Args:
+            topic: Optional topic/notes for focused practice
+            target_word_count: Optional target Chinese character count per sentence (+/- 15%)
         """
         if not self.is_available():
             raise RuntimeError("LLM not available")
@@ -452,14 +458,28 @@ Respond in JSON format:
         # Basic vocab always available
         basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 吃喝做说看听读写, 家人朋友老师学生"
 
+        # Determine sentence length guidance
+        if target_word_count:
+            min_chars = int(target_word_count * 0.85)
+            max_chars = int(target_word_count * 1.15)
+            length_guidance = f"Each sentence should be {min_chars}-{max_chars} Chinese characters long (targeting ~{target_word_count} characters)"
+        else:
+            length_guidance = "Each sentence should be 10-20 Chinese characters long"
+
+        # Topic guidance
+        if topic:
+            topic_guidance = f"TOPIC FOCUS: All sentences should relate to: {topic}"
+        else:
+            topic_guidance = "Topics: daily life, food, travel, hobbies, weather, family, work, study"
+
         prompt = f"""Generate {count} natural Chinese sentences for language practice. These should be everyday sentences a learner can translate from English to Chinese.
 
 VOCABULARY RULES:
 1. Use ONLY words from BASIC VOCABULARY and LEARNED VOCABULARY
 2. MUST include at least one REVIEW WORD in each sentence where natural
 3. May include one NEW WORD per 2-3 sentences if it fits naturally
-4. Each sentence should be 5-12 Chinese characters long
-5. Topics: daily life, food, travel, hobbies, weather, family, work, study
+4. {length_guidance}
+5. {topic_guidance}
 
 BASIC VOCABULARY (always available):
 {basic_vocab}
