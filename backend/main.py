@@ -206,23 +206,33 @@ def calculate_review_intervals(card_info: dict, deck_config: dict) -> dict:
         seen = {}
         result = {}
 
+        def parse_interval(val):
+            """Parse interval string and return (base, suffix, has_lt)."""
+            has_lt = val.startswith("<")
+            clean = val.lstrip("<")
+            # Handle all possible suffixes: m, h, d, mo, y
+            if clean.endswith("mo"):
+                return int(clean[:-2]) if clean[:-2] else 0, "mo", has_lt
+            elif clean.endswith("m"):
+                return int(clean[:-1]) if clean[:-1] else 0, "m", has_lt
+            elif clean.endswith("h"):
+                return int(clean[:-1]) if clean[:-1] else 0, "h", has_lt
+            elif clean.endswith("d"):
+                return int(clean[:-1]) if clean[:-1] else 0, "d", has_lt
+            elif clean.endswith("y"):
+                return int(clean[:-1]) if clean[:-1] else 0, "y", has_lt
+            return 0, "", has_lt
+
         for key in keys:
             val = intervals_dict[key]
             if val in seen:
                 # Duplicate found - modify to make distinct
-                # Add a suffix or adjust the value
-                if val.endswith("m"):
-                    # Try adding 1 minute increments
-                    base = int(val.rstrip("m")) if val[0] != "<" else 0
-                    for i in range(1, 60):
-                        new_val = f"{base + i}m"
-                        if new_val not in seen:
-                            val = new_val
-                            break
-                elif val.endswith("d"):
-                    base = int(val.rstrip("d")) if val[0] != "<" else 0
-                    for i in range(1, 30):
-                        new_val = f"{base + i}d"
+                base, suffix, has_lt = parse_interval(val)
+                if suffix:
+                    # Try incrementing until we find a unique value
+                    max_increments = {"m": 60, "h": 24, "d": 365, "mo": 12, "y": 10}
+                    for i in range(1, max_increments.get(suffix, 30)):
+                        new_val = f"{base + i}{suffix}"
                         if new_val not in seen:
                             val = new_val
                             break
@@ -337,20 +347,23 @@ async def get_card_intervals(card_id: int):
         # Get card info
         cards_info = await anki_client.get_cards_info([card_id])
         if not cards_info:
+            print(f"[Intervals] No card info found for card_id={card_id}")
             return {"intervals": None}
 
         card_info = cards_info[0]
         deck_name = card_info.get("deckName", "")
+        print(f"[Intervals] Card {card_id}: queue={card_info.get('queue')}, interval={card_info.get('interval')}, factor={card_info.get('factor')}, deck={deck_name}")
 
         # Get deck configuration
         try:
             deck_config = await anki_client.get_deck_config(deck_name)
         except Exception as e:
-            print(f"Could not get deck config for {deck_name}: {e}")
+            print(f"[Intervals] Could not get deck config for {deck_name}: {e}")
             deck_config = {}
 
         # Calculate intervals based on card state and deck settings
         intervals = calculate_review_intervals(card_info, deck_config)
+        print(f"[Intervals] Calculated intervals for card {card_id}: {intervals}")
 
         return {
             "intervals": intervals,
@@ -361,7 +374,7 @@ async def get_card_intervals(card_id: int):
             }
         }
     except Exception as e:
-        print(f"Error getting intervals for card {card_id}: {e}")
+        print(f"[Intervals] Error getting intervals for card {card_id}: {e}")
         return {"intervals": None}
 
 

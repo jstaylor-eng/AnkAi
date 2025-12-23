@@ -8,13 +8,6 @@ interface ChatViewProps {
   onBack: () => void
 }
 
-interface Intervals {
-  again: string
-  hard: string
-  good: string
-  easy: string
-}
-
 const wordStatusClass = {
   new: 'word-new cursor-pointer',
   due: 'word-due cursor-pointer',
@@ -91,10 +84,6 @@ export function ChatView({ onBack }: ChatViewProps) {
       await submitReview(selectedWord.card_id, ease)
       setSelectedWord(null)
     }
-  }
-
-  const handleGetIntervals = async (cardId: number): Promise<{ intervals: Intervals | null }> => {
-    return getCardIntervals(cardId)
   }
 
   const handlePlayMessage = (message: ChatMessage) => {
@@ -278,11 +267,12 @@ export function ChatView({ onBack }: ChatViewProps) {
       {/* Word popup */}
       {selectedWord && (
         <WordPopup
+          key={`${selectedWord.hanzi}-${selectedWord.card_id}`}
           word={selectedWord}
           position={popupPosition}
           onReview={handleReview}
           onClose={() => setSelectedWord(null)}
-          getIntervals={handleGetIntervals}
+          getIntervals={getCardIntervals}
         />
       )}
     </div>

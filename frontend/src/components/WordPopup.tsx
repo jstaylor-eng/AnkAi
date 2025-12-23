@@ -36,9 +36,19 @@ export function WordPopup({ word, position, onReview, onClose, getIntervals }: W
 
   useEffect(() => {
     if (canReview && word.card_id && getIntervals) {
+      console.log('WordPopup: Fetching intervals for card:', word.card_id, 'word:', word.hanzi)
       getIntervals(word.card_id)
-        .then(data => setIntervals(data.intervals))
-        .catch(() => setIntervals(null))
+        .then(data => {
+          console.log('WordPopup: Intervals response:', JSON.stringify(data, null, 2))
+          console.log('WordPopup: Setting intervals to:', data.intervals)
+          setIntervals(data.intervals)
+        })
+        .catch((err) => {
+          console.error('WordPopup: Intervals fetch error:', err)
+          setIntervals(null)
+        })
+    } else {
+      console.log('WordPopup: Skipping intervals fetch - canReview:', canReview, 'card_id:', word.card_id, 'getIntervals:', !!getIntervals)
     }
   }, [canReview, word.card_id, getIntervals])
 
