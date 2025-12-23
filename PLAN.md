@@ -2,11 +2,185 @@
 
 ## Overview
 
-A language learning web application that uses Anki flashcard decks as a vocabulary knowledge base (RAG) to:
-1. **Phase 1**: Translate web articles using only vocabulary the user knows
-2. **Phase 2**: Generate conversations that reinforce words due for review
+A language learning web application that uses Anki flashcard decks as a vocabulary knowledge base (RAG) to help users practice Chinese through reading, conversation, and recall exercises - all using vocabulary they're actually learning.
 
 The interface draws inspiration from Du Chinese's clean reading layout with tappable words, pinyin annotations, and adjustable speech rate.
+
+---
+
+## Current Status (December 2025)
+
+### Production Deployment
+
+**Live at**: http://130.162.167.220 (Oracle Cloud Free Tier)
+- **Server**: Oracle Cloud VM.Standard.A1.Flex (x86_64), UK South (London), AD-3
+- **Domain**: ainki.duckdns.org (HTTPS currently failing due to DuckDNS CAA record issues with Let's Encrypt)
+- **VNC Access**: http://130.162.167.220:3000 (for Anki management)
+- **SSH**: `ssh opc@130.162.167.220`
+
+### Server Details
+
+- **OS**: Oracle Linux 9
+- **Docker**: Docker 29.1.3, Docker Compose v5.0.0
+- **Data locations**:
+  - Anki data: `/home/opc/anki-data/`
+  - AnkiConnect addon: `/home/opc/AnkAi/anki/addons21/2055492159/`
+  - App code: `/home/opc/AnkAi/`
+
+### Deployment Commands
+
+```bash
+# SSH into server
+ssh opc@130.162.167.220
+
+# Update and redeploy
+cd ~/AnkAi
+git pull
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d
+
+# View logs
+docker logs ankai-backend
+docker logs ankai-anki
+docker logs ankai-caddy
+
+# Test AnkiConnect
+docker exec ankai-anki curl -s http://localhost:8765 -X POST -d '{"action": "version", "version": 6}'
+
+# Restart Anki (if needed)
+docker restart ankai-anki
+```
+
+### Completed Features (Phase 1)
+
+- **Article Translation**: Paste text or URL, AI rewrites using user's known vocabulary
+- **English → Chinese Translation**: Automatically detects English articles and translates to learner-appropriate Chinese
+- **Clean Article Extraction**: Uses trafilatura to extract main article content, filters boilerplate text (image captions, JS warnings, etc.)
+- **Vocabulary Integration**: Loads vocabulary from selected Anki decks, classifies as NEW/DUE/LEARNED/UNKNOWN
+- **Reader Interface**: Du Chinese-inspired layout with:
+  - Tappable words showing pinyin and definition
+  - Color-coded vocabulary status (blue=new, orange=due)
+  - Toggle pinyin, translation, and original text
+  - Sticky stats bar (comprehension %, due/new counts) - stays visible when scrolling
+  - Mobile-responsive design with wrapping controls
+- **TTS Playback**: Edge TTS with adjustable speed (0.5x-1.0x), sentence-by-sentence or continuous
+- **Anki Review**: Tap words to review, submit ease ratings directly to Anki
+- **Cloud Deployment**: Running on Oracle Cloud Free Tier with Docker Compose
+  - Anki Desktop in Docker with AnkiConnect
+  - Caddy reverse proxy
+  - AnkiConnect addon properly configured
+
+### Tech Stack (Implemented)
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18, TypeScript, TailwindCSS, Vite |
+| Backend | Python 3.11, FastAPI, Pydantic |
+| Article Extraction | trafilatura (clean main content extraction) |
+| Chinese NLP | jieba, pypinyin |
+| LLM | Groq API (llama-3.3-70b-versatile) - free tier |
+| TTS | edge-tts |
+| Anki | anki-desktop-docker + AnkiConnect API |
+| Deployment | Docker Compose, Caddy, Oracle Cloud Free Tier |
+
+### Known Issues
+
+1. **HTTPS not working**: DuckDNS has intermittent CAA record issues that prevent Let's Encrypt from issuing certificates. Currently using HTTP only.
+2. **AnkiConnect addon location**: The addon must be in `~/AnkAi/anki/addons21/2055492159/` (NOT in the anki_data volume) due to volume mount order in docker-compose
+
+---
+
+## Feature Backlog
+
+### Priority 1: Landing Page Redesign
+**Goal**: Create a central hub with multiple learning modes
+
+Current UX goes directly to deck selection → article input. Redesign to:
+```
+┌────────────────────────────────────────────────┐
+│                    AnkAi                        │
+│         Learn Chinese Your Way                  │
+├────────────────────────────────────────────────┤
+│                                                │
+│   ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│   │   📖     │  │   💬     │  │   🔄     │   │
+│   │  Read    │  │  Chat    │  │ Recall   │   │
+│   │ Articles │  │  with AI │  │ Practice │   │
+│   └──────────┘  └──────────┘  └──────────┘   │
+│                                                │
+│   Decks: HSK4, HSK5  •  1,234 words loaded    │
+│                                                │
+└────────────────────────────────────────────────┘
+```
+
+**Implementation**:
+- New `LandingPage.tsx` component with 3 feature cards
+- Route to appropriate feature when card clicked
+- Keep deck selection accessible (settings/change decks button)
+- Show vocab stats summary at bottom
+
+### Priority 2: Conversation Mode (Phase 2)
+**Goal**: AI chat that uses the user's vocabulary
+
+Features:
+- Chat interface for conversational practice
+- AI uses LEARNED vocabulary, introduces DUE/NEW words naturally
+- Each AI message shows Chinese with pinyin (tappable words)
+- User can respond in Chinese or English
+- Words can be reviewed mid-conversation
+
+**Backend**:
+- New `/api/chat` endpoint
+- Maintains conversation context
+- LLM prompt includes vocabulary constraints
+
+**Frontend**:
+- `ChatView.tsx` component
+- Message bubbles with word highlighting
+- Input field with send button
+- Same word popup/review mechanism as Reader
+
+### Priority 3: Recall Practice Mode (Phase 3)
+**Goal**: English → Chinese translation practice
+
+User sees English sentence, must recall the Chinese. Features:
+- Generate sentences using only words user should know (LEARNED + DUE)
+- Show English sentence first
+- Reveal options:
+  - Chinese characters
+  - Pinyin
+  - English in Chinese word order (even if grammatically odd)
+- TTS to hear the Chinese
+- Mark words as reviewed
+
+**Example UI**:
+```
+┌────────────────────────────────────────────────┐
+│ Translate to Chinese:                          │
+│                                                │
+│ "I want to eat dumplings today."               │
+│                                                │
+│ [Show Chinese] [Show Pinyin] [Show Word Order] │
+│                                                │
+│ ☐ 我今天想吃饺子。                              │
+│ ☐ wǒ jīntiān xiǎng chī jiǎozi                 │
+│ ☐ I today want eat dumplings                   │
+│                                                │
+│ 🔊 [Play Audio]                                │
+│                                                │
+│ [Next Sentence]                                │
+└────────────────────────────────────────────────┘
+```
+
+**Backend**:
+- New `/api/recall/generate` endpoint
+- LLM generates sentences using constrained vocabulary
+- Returns: english, chinese, pinyin, word_order_english
+
+**Frontend**:
+- `RecallView.tsx` component
+- Toggle checkboxes for each reveal option
+- Audio playback button
 
 ---
 
