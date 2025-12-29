@@ -11,7 +11,8 @@ interface FeatureCard {
 const FEATURE_CARDS: FeatureCard[] = [
   { id: 'read', title: 'Read Articles', description: 'Practice with news & stories', icon: '📖', enabled: true },
   { id: 'recall', title: 'Recall Practice', description: 'Quick translation drills', icon: '🔄', enabled: true },
-  { id: 'extended-recall', title: 'Extended Recall', description: 'Custom topic & length', icon: '📝', enabled: true },
+  { id: 'extended-recall', title: 'Extended Recall', description: 'Longer passage recall', icon: '📝', enabled: true },
+  { id: 'topic-generator', title: 'Topic Generator', description: 'Read generated content', icon: '🎯', enabled: true },
   { id: 'chat', title: 'Chat with AI', description: 'Conversation practice', icon: '💬', enabled: true },
 ]
 

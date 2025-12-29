@@ -5,10 +5,11 @@ import { LandingPage } from './components/LandingPage'
 import { Reader } from './components/Reader'
 import { RecallView } from './components/RecallView'
 import { ExtendedRecallView } from './components/ExtendedRecallView'
+import { TopicGeneratorView } from './components/TopicGeneratorView'
 import { ChatView } from './components/ChatView'
 import type { ProcessedArticle, VocabStats } from './types'
 
-type AppState = 'loading' | 'error' | 'select-decks' | 'landing' | 'ready' | 'processing' | 'reading' | 'recall' | 'extended-recall' | 'chat'
+type AppState = 'loading' | 'error' | 'select-decks' | 'landing' | 'ready' | 'processing' | 'reading' | 'recall' | 'extended-recall' | 'topic-generator' | 'chat'
 
 function App() {
   const [state, setState] = useState<AppState>('loading')
@@ -61,6 +62,8 @@ function App() {
       setState('recall')
     } else if (mode === 'extended-recall') {
       setState('extended-recall')
+    } else if (mode === 'topic-generator') {
+      setState('topic-generator')
     } else if (mode === 'chat') {
       setState('chat')
     }
@@ -169,6 +172,11 @@ function App() {
   // Extended recall practice view
   if (state === 'extended-recall') {
     return <ExtendedRecallView onBack={() => setState('landing')} />
+  }
+
+  // Topic generator view (reading mode with generated content)
+  if (state === 'topic-generator') {
+    return <TopicGeneratorView onBack={() => setState('landing')} />
   }
 
   // Chat view
