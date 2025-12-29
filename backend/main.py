@@ -517,9 +517,11 @@ async def generate_recall_sentences(request: RecallGenerateRequest) -> RecallGen
 async def generate_recall_passage(request: RecallPassageRequest) -> ProcessedArticle:
     """Generate a passage for extended recall practice, returned as ProcessedArticle for Reader display"""
     try:
+        print(f"[Passage] Starting generation with topic={request.topic}, chars={request.target_char_count}")
         learned = vocab_manager.get_words_by_status(VocabStatus.LEARNED)
         due = vocab_manager.get_words_by_status(VocabStatus.DUE)
         new = vocab_manager.get_words_by_status(VocabStatus.NEW)
+        print(f"[Passage] Vocab: {len(learned)} learned, {len(due)} due, {len(new)} new")
 
         if not learned and not due:
             raise HTTPException(
@@ -528,6 +530,7 @@ async def generate_recall_passage(request: RecallPassageRequest) -> ProcessedArt
             )
 
         # Generate the passage with LLM
+        print("[Passage] Calling LLM...")
         passage_result = await llm_service.generate_recall_passage(
             learned_vocab=learned,
             due_vocab=due,
@@ -535,12 +538,14 @@ async def generate_recall_passage(request: RecallPassageRequest) -> ProcessedArt
             topic=request.topic,
             target_char_count=request.target_char_count
         )
+        print(f"[Passage] LLM returned: {passage_result.keys() if passage_result else 'None'}")
 
         # Process the Chinese text through ArticleProcessor for word segmentation
         if not article_processor:
             raise HTTPException(status_code=500, detail="Article processor not initialized")
 
         # Process as Chinese text (no rewriting needed since LLM already used our vocab)
+        print("[Passage] Processing article...")
         result = await article_processor.process_article(
             text=passage_result["chinese"],
             rewrite=False,
@@ -556,11 +561,16 @@ async def generate_recall_passage(request: RecallPassageRequest) -> ProcessedArt
         result.stats["english_translation"] = passage_result.get("english", "")
         result.stats["is_generated_passage"] = True
 
+        print(f"[Passage] Success! Title: {result.title}")
         return result
 
     except RuntimeError as e:
+        print(f"[Passage] RuntimeError: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
+        import traceback
+        print(f"[Passage] Exception: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to generate passage: {e}")
 
 

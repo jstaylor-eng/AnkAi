@@ -261,7 +261,6 @@ class ArticleProcessor:
             else:
                 print("LLM not available - cannot translate English to Chinese")
                 # Return error message as a sentence
-                from models import Sentence
                 return ProcessedArticle(
                     title="",
                     sentences=[Sentence(
