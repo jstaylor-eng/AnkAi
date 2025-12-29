@@ -447,13 +447,24 @@ Respond in JSON format:
             topic: Optional topic/notes for focused practice
             target_word_count: Optional target Chinese character count per sentence (+/- 15%)
         """
+        import random
+
         if not self.is_available():
             raise RuntimeError("LLM not available")
 
-        # Prepare vocabulary lists
-        learned_list = ", ".join([w.hanzi for w in learned_vocab[:400]])
-        due_list = ", ".join([w.hanzi for w in due_vocab[:30]])
-        new_list = ", ".join([w.hanzi for w in new_vocab[:5]])
+        # Shuffle and sample vocabulary for variety
+        learned_shuffled = learned_vocab.copy()
+        random.shuffle(learned_shuffled)
+        due_shuffled = due_vocab.copy()
+        random.shuffle(due_shuffled)
+        new_shuffled = new_vocab.copy()
+        random.shuffle(new_shuffled)
+
+        # Take a diverse sample of learned vocab
+        learned_list = ", ".join([w.hanzi for w in learned_shuffled[:300]])
+        # Prioritize ALL due words - these are the ones to practice
+        due_list = ", ".join([w.hanzi for w in due_shuffled[:50]])
+        new_list = ", ".join([w.hanzi for w in new_shuffled[:10]])
 
         # Basic vocab always available
         basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 吃喝做说看听读写, 家人朋友老师学生"
@@ -466,38 +477,51 @@ Respond in JSON format:
         else:
             length_guidance = "Each sentence should be 10-20 Chinese characters long"
 
-        # Topic guidance
+        # Topic guidance with variety
         if topic:
             topic_guidance = f"TOPIC FOCUS: All sentences should relate to: {topic}"
         else:
-            topic_guidance = "Topics: daily life, food, travel, hobbies, weather, family, work, study"
+            # Randomize default topics for variety
+            all_topics = ["daily life", "food and cooking", "travel", "hobbies", "weather",
+                         "family", "work", "study", "shopping", "health", "entertainment",
+                         "sports", "technology", "nature", "emotions", "time and schedules"]
+            selected_topics = random.sample(all_topics, min(5, len(all_topics)))
+            topic_guidance = f"Topics (use variety): {', '.join(selected_topics)}"
 
-        prompt = f"""Generate {count} natural Chinese sentences for language practice. These should be everyday sentences a learner can translate from English to Chinese.
+        prompt = f"""Generate {count} DIVERSE Chinese sentences for language practice. Each sentence should be unique and different from the others.
 
-VOCABULARY RULES:
-1. Use ONLY words from BASIC VOCABULARY and LEARNED VOCABULARY
-2. MUST include at least one REVIEW WORD in each sentence where natural
-3. May include one NEW WORD per 2-3 sentences if it fits naturally
+CRITICAL REQUIREMENTS:
+1. VARIETY: Each sentence must use different vocabulary and sentence structures. NO repetitive patterns!
+2. DUE WORDS: You MUST include words from the REVIEW WORDS list - these are the priority words the student needs to practice. Try to use DIFFERENT review words in each sentence.
+3. Use vocabulary from BASIC + LEARNED lists for other words
 4. {length_guidance}
 5. {topic_guidance}
 
-BASIC VOCABULARY (always available):
+VOCABULARY LISTS:
+
+BASIC VOCABULARY (grammar words, always available):
 {basic_vocab}
 
-LEARNED VOCABULARY (use freely):
+LEARNED VOCABULARY (student knows these - use variety from this list):
 {learned_list}
 
-REVIEW WORDS (prioritize including these):
+★ REVIEW WORDS - PRIORITY ★ (MUST include these - spread across sentences):
 {due_list}
 
-NEW WORDS (may introduce):
+NEW WORDS (may introduce 1-2 total):
 {new_list}
+
+IMPORTANT:
+- Use DIFFERENT review words in each sentence
+- Vary sentence structures (questions, statements, commands, etc.)
+- Vary topics across sentences
+- Avoid repeating the same vocabulary patterns
 
 For each sentence, provide:
 - "english": Natural English sentence
-- "chinese": Chinese translation using only allowed vocabulary
+- "chinese": Chinese translation using allowed vocabulary
 - "pinyin": Pinyin with tone marks (e.g., "Wǒ xiǎng chī fàn")
-- "word_order_english": Word-by-word English gloss in Chinese word order (e.g., "I want eat rice")
+- "word_order_english": Word-by-word English gloss in Chinese word order
 
 Return ONLY a JSON array:
 [{{"english": "...", "chinese": "...", "pinyin": "...", "word_order_english": "..."}}]"""
@@ -622,6 +646,94 @@ Respond naturally as a tutor would. Return ONLY a JSON object:
             traceback.print_exc()
             raise RuntimeError(f"Failed to generate response: {e}")
 
+    async def _fetch_wikipedia_context(self, topic: str) -> str:
+        """Fetch relevant context from Wikipedia for the given topic."""
+        try:
+            # Search Wikipedia for the topic
+            search_url = "https://en.wikipedia.org/w/api.php"
+            search_params = {
+                "action": "query",
+                "list": "search",
+                "srsearch": topic,
+                "srlimit": 3,
+                "format": "json"
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.get(search_url, params=search_params, timeout=10.0)
+                data = response.json()
+
+                if not data.get("query", {}).get("search"):
+                    return ""
+
+                # Get the first result's page content
+                page_title = data["query"]["search"][0]["title"]
+
+                # Fetch page extract
+                extract_params = {
+                    "action": "query",
+                    "titles": page_title,
+                    "prop": "extracts",
+                    "exintro": True,
+                    "explaintext": True,
+                    "exsentences": 5,
+                    "format": "json"
+                }
+
+                response = await client.get(search_url, params=extract_params, timeout=10.0)
+                data = response.json()
+
+                pages = data.get("query", {}).get("pages", {})
+                for page_id, page_data in pages.items():
+                    extract = page_data.get("extract", "")
+                    if extract:
+                        print(f"[RAG] Retrieved Wikipedia context for '{topic}': {len(extract)} chars")
+                        return extract[:1500]  # Limit context size
+
+                return ""
+        except Exception as e:
+            print(f"[RAG] Wikipedia fetch error: {e}")
+            return ""
+
+    async def _web_search_context(self, topic: str) -> str:
+        """Fetch relevant context from DuckDuckGo search."""
+        try:
+            # Use DuckDuckGo instant answer API
+            search_url = "https://api.duckduckgo.com/"
+            params = {
+                "q": topic,
+                "format": "json",
+                "no_html": 1,
+                "skip_disambig": 1
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.get(search_url, params=params, timeout=10.0)
+                data = response.json()
+
+                # Get abstract text
+                abstract = data.get("AbstractText", "")
+                if abstract:
+                    print(f"[RAG] Retrieved DuckDuckGo context for '{topic}': {len(abstract)} chars")
+                    return abstract[:1000]
+
+                # Try related topics
+                related = data.get("RelatedTopics", [])
+                if related:
+                    texts = []
+                    for item in related[:3]:
+                        if isinstance(item, dict) and "Text" in item:
+                            texts.append(item["Text"])
+                    if texts:
+                        result = " ".join(texts)[:1000]
+                        print(f"[RAG] Retrieved DuckDuckGo related topics: {len(result)} chars")
+                        return result
+
+                return ""
+        except Exception as e:
+            print(f"[RAG] DuckDuckGo fetch error: {e}")
+            return ""
+
     async def generate_recall_passage(
         self,
         learned_vocab: list["Word"],
@@ -632,62 +744,107 @@ Respond naturally as a tutor would. Return ONLY a JSON object:
     ) -> dict:
         """
         Generate a Chinese passage for extended recall practice.
+        Uses RAG to fetch real information about the topic from Wikipedia/web.
         Returns passage text with English translation for display in Reader.
 
         Args:
             topic: Optional topic/notes for focused practice
             target_char_count: Target total Chinese characters for the passage
         """
+        import random
+
         if not self.is_available():
             raise RuntimeError("LLM not available")
 
+        # Shuffle vocabulary for variety
+        learned_shuffled = learned_vocab.copy()
+        random.shuffle(learned_shuffled)
+        due_shuffled = due_vocab.copy()
+        random.shuffle(due_shuffled)
+
         # Prepare vocabulary lists
-        learned_list = ", ".join([w.hanzi for w in learned_vocab[:400]])
-        due_list = ", ".join([w.hanzi for w in due_vocab[:30]])
-        new_list = ", ".join([w.hanzi for w in new_vocab[:5]])
+        learned_list = ", ".join([w.hanzi for w in learned_shuffled[:400]])
+        due_list = ", ".join([w.hanzi for w in due_shuffled[:40]])
+        new_list = ", ".join([w.hanzi for w in new_vocab[:8]])
 
         # Basic vocab always available
-        basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 吃喝做说看听读写, 家人朋友老师学生"
+        basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 吃喝做说看听读写, 家人朋友老师学生, 知道觉得喜欢希望"
 
         # Calculate target range
         min_chars = int(target_char_count * 0.85)
         max_chars = int(target_char_count * 1.15)
 
+        # RAG: Fetch context from Wikipedia/web if topic provided
+        rag_context = ""
+        if topic:
+            print(f"[RAG] Fetching context for topic: {topic}")
+            # Try Wikipedia first, then DuckDuckGo
+            rag_context = await self._fetch_wikipedia_context(topic)
+            if not rag_context:
+                rag_context = await self._web_search_context(topic)
+
+            if rag_context:
+                rag_context = f"""
+REFERENCE INFORMATION (use this to create factual, interesting content):
+{rag_context}
+
+Based on this information, create an engaging Chinese passage about {topic}."""
+            else:
+                print(f"[RAG] No context found, generating without RAG")
+
         # Topic guidance
         if topic:
-            topic_guidance = f"TOPIC: Write about: {topic}"
+            if rag_context:
+                topic_guidance = f"TOPIC: Write an informative passage about: {topic}\n{rag_context}"
+            else:
+                topic_guidance = f"TOPIC: Write an interesting passage about: {topic}"
         else:
-            topic_guidance = "TOPIC: Write about daily life, an interesting experience, or a simple story"
+            # Random interesting topics when none provided
+            interesting_topics = [
+                "a memorable meal", "learning something new", "a surprise encounter",
+                "changing seasons", "a favorite place", "an important decision",
+                "helping someone", "overcoming a challenge", "a celebration",
+                "discovering something unexpected"
+            ]
+            random_topic = random.choice(interesting_topics)
+            topic_guidance = f"TOPIC: Write an engaging short story or reflection about: {random_topic}"
 
-        prompt = f"""Generate a short Chinese passage for language practice. This should be natural text that a learner can read and understand.
+        prompt = f"""Generate a Chinese passage for language practice. Create interesting, engaging content that a learner would enjoy reading.
 
 {topic_guidance}
 
-LENGTH: The passage should be {min_chars}-{max_chars} Chinese characters total (multiple sentences).
+LENGTH: {min_chars}-{max_chars} Chinese characters total (2-4 sentences for shorter, more for longer).
 
 VOCABULARY RULES:
-1. Use ONLY words from BASIC VOCABULARY and LEARNED VOCABULARY
-2. TRY to include some REVIEW WORDS naturally
-3. May include 1-2 NEW WORDS if they fit naturally
-4. Write natural, flowing text - not disconnected sentences
+1. Use words from BASIC VOCABULARY and LEARNED VOCABULARY for most of the passage
+2. MUST include several REVIEW WORDS naturally throughout
+3. May use proper nouns (names, places, brands) when they fit the topic
+4. May introduce 1-3 NEW WORDS if they're essential to the topic
+5. Write natural, flowing text that tells a story or conveys information
 
-BASIC VOCABULARY (always available):
+BASIC VOCABULARY (grammar and common words):
 {basic_vocab}
 
-LEARNED VOCABULARY (use freely):
+LEARNED VOCABULARY (student knows these):
 {learned_list}
 
-REVIEW WORDS (try to include these):
+★ REVIEW WORDS (prioritize including these):
 {due_list}
 
-NEW WORDS (may introduce):
+NEW WORDS (may introduce if needed):
 {new_list}
+
+Create content that is:
+- Factually interesting (if about a real topic)
+- Engaging and not generic
+- Natural-sounding Chinese
+- At an appropriate difficulty level
 
 Return ONLY a JSON object:
 {{
   "chinese": "The full Chinese passage",
   "english": "English translation of the passage",
-  "title": "A short title for the passage (in English, 2-5 words)"
+  "title": "A short descriptive title (in English, 2-5 words)"
 }}"""
 
         try:
