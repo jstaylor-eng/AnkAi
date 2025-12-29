@@ -9,6 +9,7 @@ interface ExtendedRecallViewProps {
 interface Passage {
   chinese: string
   english: string
+  pinyin: string
   title: string
 }
 
@@ -16,7 +17,7 @@ type ViewState = 'setup' | 'practice'
 
 export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
   const { generateRecallPassage, loading } = useAnki()
-  const { speakWord, rate, setRate } = useTTS()
+  const { speakWord, stop, isPlaying, rate, setRate } = useTTS()
 
   // Setup state
   const [viewState, setViewState] = useState<ViewState>('setup')
@@ -26,20 +27,31 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
   // Practice state
   const [passage, setPassage] = useState<Passage | null>(null)
   const [showChinese, setShowChinese] = useState(false)
+  const [showPinyin, setShowPinyin] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const loadPassage = async () => {
     setLoadError(null)
     setShowChinese(false)
+    setShowPinyin(false)
+    stop() // Stop any playing audio
     try {
       const result = await generateRecallPassage(
         topic.trim() || undefined,
         targetCharCount
       )
       // Extract passage info from ProcessedArticle
+      // Build pinyin from word data
+      const pinyin = result.sentences
+        .flatMap(s => s.words.map(w => w.pinyin || ''))
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+
       setPassage({
         chinese: result.sentences.map(s => s.simplified || s.original).join(''),
         english: result.stats.english_translation || '',
+        pinyin,
         title: result.title || 'Practice Passage',
       })
       setViewState('practice')
@@ -53,18 +65,23 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
   }
 
   const handleBackToSetup = () => {
+    stop() // Stop any playing audio
     setViewState('setup')
     setPassage(null)
     setShowChinese(false)
+    setShowPinyin(false)
   }
 
-  const handlePlayAudio = () => {
-    if (passage?.chinese) {
+  const handleToggleAudio = () => {
+    if (isPlaying) {
+      stop()
+    } else if (passage?.chinese) {
       speakWord(passage.chinese)
     }
   }
 
   const handleNewPassage = () => {
+    stop() // Stop any playing audio
     loadPassage()
   }
 
@@ -203,17 +220,31 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
             </div>
           </div>
 
-          {/* Reveal toggle */}
-          <div className="mb-6">
+          {/* Reveal toggles */}
+          <div className="flex gap-3 mb-6">
             <button
               onClick={() => setShowChinese(!showChinese)}
-              className={`w-full py-3 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex-1 py-3 rounded-lg text-sm font-medium transition-colors ${
                 showChinese
-                  ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
                   : 'bg-green-600 text-white hover:bg-green-700'
               }`}
             >
-              {showChinese ? 'Hide Chinese Answer' : 'Show Chinese Answer'}
+              {showChinese ? 'Hide Chinese' : 'Show Chinese'}
+            </button>
+            <button
+              onClick={() => setShowPinyin(!showPinyin)}
+              disabled={!showChinese}
+              className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                !showChinese
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : showPinyin
+                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title={showChinese ? 'Toggle pinyin' : 'Reveal Chinese first'}
+            >
+              {showPinyin ? 'Hide Pinyin' : 'Pinyin'}
             </button>
           </div>
 
@@ -224,25 +255,35 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
               <div className="text-2xl chinese-text leading-relaxed text-gray-900">
                 {passage.chinese}
               </div>
+              {showPinyin && passage.pinyin && (
+                <div className="mt-3 pt-3 border-t border-green-200">
+                  <div className="text-sm text-green-700 mb-1">Pinyin:</div>
+                  <div className="text-lg text-gray-700">
+                    {passage.pinyin}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* Audio and controls */}
           <div className="flex items-center justify-between border-t pt-4">
             <div className="flex items-center gap-4">
-              {/* Play audio button */}
+              {/* Play/Stop audio button */}
               <button
-                onClick={handlePlayAudio}
+                onClick={handleToggleAudio}
                 disabled={!showChinese}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  showChinese
-                    ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  !showChinese
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : isPlaying
+                    ? 'bg-red-100 hover:bg-red-200 text-red-700'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                 }`}
-                title={showChinese ? 'Play audio' : 'Reveal Chinese first'}
+                title={!showChinese ? 'Reveal Chinese first' : isPlaying ? 'Stop audio' : 'Play audio'}
               >
-                <span className="text-lg">&#128266;</span>
-                <span className="text-sm">Play</span>
+                <span className="text-lg">{isPlaying ? '⏹' : '▶'}</span>
+                <span className="text-sm">{isPlaying ? 'Stop' : 'Play'}</span>
               </button>
 
               {/* Speed control */}
