@@ -685,6 +685,96 @@ async def trigger_sync():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# News operations
+
+@app.get("/api/news/headlines")
+async def get_news_headlines():
+    """Fetch BBC news headlines and translate using user's vocabulary"""
+    import httpx
+    import xml.etree.ElementTree as ET
+
+    try:
+        # Fetch BBC World News RSS feed
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://feeds.bbci.co.uk/news/world/rss.xml",
+                timeout=15.0
+            )
+            response.raise_for_status()
+
+        # Parse RSS feed
+        root = ET.fromstring(response.text)
+        headlines = []
+
+        for item in root.findall(".//item")[:10]:  # Get top 10 headlines
+            title = item.find("title")
+            description = item.find("description")
+            link = item.find("link")
+            pub_date = item.find("pubDate")
+
+            if title is not None:
+                headlines.append({
+                    "title": title.text,
+                    "description": description.text if description is not None else "",
+                    "link": link.text if link is not None else "",
+                    "pubDate": pub_date.text if pub_date is not None else ""
+                })
+
+        if not headlines:
+            raise HTTPException(status_code=500, detail="No headlines found in feed")
+
+        # Get vocabulary for translation
+        learned = vocab_manager.get_words_by_status(VocabStatus.LEARNED)
+        due = vocab_manager.get_words_by_status(VocabStatus.DUE)
+        new = vocab_manager.get_words_by_status(VocabStatus.NEW)
+
+        if not learned and not due:
+            raise HTTPException(
+                status_code=400,
+                detail="No vocabulary loaded. Please select decks first."
+            )
+
+        # Translate headlines using LLM with vocabulary constraints
+        translated = await llm_service.translate_headlines(
+            headlines=headlines,
+            learned_vocab=learned,
+            due_vocab=due,
+            new_vocab=new
+        )
+
+        return {
+            "headlines": translated,
+            "source": "BBC World News",
+            "fetch_time": response.headers.get("date", "")
+        }
+
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch news: {e}")
+    except ET.ParseError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse news feed: {e}")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"News error: {e}")
+
+
+@app.post("/api/news/process-headline")
+async def process_news_headline(headline_text: str):
+    """Process a single headline into a full article with word breakdown"""
+    if not article_processor:
+        raise HTTPException(status_code=500, detail="Article processor not initialized")
+
+    try:
+        result = await article_processor.process_article(
+            text=headline_text,
+            rewrite=False,
+            source_lang="zh"
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Processing error: {e}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

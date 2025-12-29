@@ -1,15 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAnki } from '../hooks/useAnki'
-import { useTTS } from '../hooks/useTTS'
 
 interface ExtendedRecallViewProps {
   onBack: () => void
 }
 
+interface WordWithPinyin {
+  hanzi: string
+  pinyin: string
+}
+
 interface Passage {
   chinese: string
   english: string
-  pinyin: string
+  words: WordWithPinyin[]
   title: string
 }
 
@@ -17,7 +21,6 @@ type ViewState = 'setup' | 'practice'
 
 export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
   const { generateRecallPassage, loading } = useAnki()
-  const { speakWord, stop, isPlaying, rate, setRate } = useTTS()
 
   // Setup state
   const [viewState, setViewState] = useState<ViewState>('setup')
@@ -30,28 +33,45 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
   const [showPinyin, setShowPinyin] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
+  // Audio state - managed locally for proper play/stop
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [rate, setRate] = useState(0.8)
+
+  // Stop audio function
+  const stopAudio = useCallback(() => {
+    speechSynthesis.cancel()
+    setIsPlaying(false)
+  }, [])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      speechSynthesis.cancel()
+    }
+  }, [])
+
   const loadPassage = async () => {
     setLoadError(null)
     setShowChinese(false)
     setShowPinyin(false)
-    stop() // Stop any playing audio
+    stopAudio()
     try {
       const result = await generateRecallPassage(
         topic.trim() || undefined,
         targetCharCount
       )
-      // Extract passage info from ProcessedArticle
-      // Build pinyin from word data
-      const pinyin = result.sentences
-        .flatMap(s => s.words.map(w => w.pinyin || ''))
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim()
+      // Extract words with pinyin for ruby display
+      const words: WordWithPinyin[] = result.sentences.flatMap(s =>
+        s.words.map(w => ({
+          hanzi: w.hanzi,
+          pinyin: w.pinyin || ''
+        }))
+      )
 
       setPassage({
         chinese: result.sentences.map(s => s.simplified || s.original).join(''),
         english: result.stats.english_translation || '',
-        pinyin,
+        words,
         title: result.title || 'Practice Passage',
       })
       setViewState('practice')
@@ -65,7 +85,7 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
   }
 
   const handleBackToSetup = () => {
-    stop() // Stop any playing audio
+    stopAudio()
     setViewState('setup')
     setPassage(null)
     setShowChinese(false)
@@ -74,14 +94,29 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
 
   const handleToggleAudio = () => {
     if (isPlaying) {
-      stop()
+      stopAudio()
     } else if (passage?.chinese) {
-      speakWord(passage.chinese)
+      const utterance = new SpeechSynthesisUtterance(passage.chinese)
+      utterance.lang = 'zh-CN'
+      utterance.rate = rate
+
+      // Get Chinese voice
+      const voices = speechSynthesis.getVoices()
+      const chineseVoice = voices.find(v =>
+        v.lang.includes('zh') || v.lang.includes('cmn')
+      )
+      if (chineseVoice) utterance.voice = chineseVoice
+
+      utterance.onend = () => setIsPlaying(false)
+      utterance.onerror = () => setIsPlaying(false)
+
+      speechSynthesis.speak(utterance)
+      setIsPlaying(true)
     }
   }
 
   const handleNewPassage = () => {
-    stop() // Stop any playing audio
+    stopAudio()
     loadPassage()
   }
 
@@ -252,17 +287,22 @@ export function ExtendedRecallView({ onBack }: ExtendedRecallViewProps) {
           {showChinese && (
             <div className="p-4 bg-green-50 rounded-lg border border-green-100 mb-6">
               <div className="text-sm text-green-700 mb-2">Chinese:</div>
-              <div className="text-2xl chinese-text leading-relaxed text-gray-900">
-                {passage.chinese}
+              <div className="text-2xl chinese-text leading-loose text-gray-900">
+                {showPinyin ? (
+                  // Ruby display with pinyin above each word
+                  passage.words.map((word, idx) => (
+                    <ruby key={idx} className="mx-0.5">
+                      {word.hanzi}
+                      <rp>(</rp>
+                      <rt className="text-xs text-gray-500 font-normal">{word.pinyin}</rt>
+                      <rp>)</rp>
+                    </ruby>
+                  ))
+                ) : (
+                  // Plain Chinese text
+                  passage.chinese
+                )}
               </div>
-              {showPinyin && passage.pinyin && (
-                <div className="mt-3 pt-3 border-t border-green-200">
-                  <div className="text-sm text-green-700 mb-1">Pinyin:</div>
-                  <div className="text-lg text-gray-700">
-                    {passage.pinyin}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 

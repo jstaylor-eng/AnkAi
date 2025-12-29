@@ -124,6 +124,21 @@ export function useAnki() {
     })
   }, [fetchApi])
 
+  const getNewsHeadlines = useCallback(async () => {
+    return fetchApi<{
+      headlines: Array<{
+        original: string
+        description: string
+        link: string
+        pubDate: string
+        chinese: string
+        pinyin: string
+      }>
+      source: string
+      fetch_time: string
+    }>('/news/headlines')
+  }, [fetchApi])
+
   return {
     loading,
     error,
@@ -137,5 +152,6 @@ export function useAnki() {
     generateRecallSentences,
     generateRecallPassage,
     sendChatMessage,
+    getNewsHeadlines,
   }
 }

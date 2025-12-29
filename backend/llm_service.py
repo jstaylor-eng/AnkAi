@@ -792,59 +792,82 @@ Based on this information, create an engaging Chinese passage about {topic}."""
             else:
                 print(f"[RAG] No context found, generating without RAG")
 
+        # Content styles for variety
+        content_styles = [
+            "a first-person narrative/story",
+            "a descriptive scene with sensory details",
+            "a mini dialogue between people",
+            "an opinion piece with reasons",
+            "a how-to or process description",
+            "a comparison between two things",
+            "a personal memory or experience",
+            "a factual description with specific details"
+        ]
+        chosen_style = random.choice(content_styles)
+
         # Topic guidance
         if topic:
             if rag_context:
-                topic_guidance = f"TOPIC: Write an informative passage about: {topic}\n{rag_context}"
+                topic_guidance = f"TOPIC: {topic}\n{rag_context}"
             else:
-                topic_guidance = f"TOPIC: Write an interesting passage about: {topic}"
+                topic_guidance = f"TOPIC: {topic}"
         else:
-            # Random interesting topics when none provided
-            interesting_topics = [
-                "a memorable meal", "learning something new", "a surprise encounter",
-                "changing seasons", "a favorite place", "an important decision",
-                "helping someone", "overcoming a challenge", "a celebration",
-                "discovering something unexpected"
+            # Random specific scenarios when no topic provided
+            scenarios = [
+                "buying coffee at a new cafe and the barista recommends something",
+                "waiting for a bus in the rain and meeting someone interesting",
+                "cooking a dish for the first time and what happened",
+                "finding something unexpected while cleaning",
+                "a phone call that changed plans for the day",
+                "trying a new restaurant and the surprising menu",
+                "getting lost and asking for directions",
+                "a birthday gift that was perfect (or terrible)",
+                "the first day at a new place (job, school, city)",
+                "watching the sunrise or sunset somewhere special"
             ]
-            random_topic = random.choice(interesting_topics)
-            topic_guidance = f"TOPIC: Write an engaging short story or reflection about: {random_topic}"
+            topic_guidance = f"SCENARIO: {random.choice(scenarios)}"
 
-        prompt = f"""Generate a Chinese passage for language practice. Create interesting, engaging content that a learner would enjoy reading.
+        prompt = f"""Write a short Chinese passage as {chosen_style}.
 
 {topic_guidance}
 
-LENGTH: {min_chars}-{max_chars} Chinese characters total (2-4 sentences for shorter, more for longer).
+LENGTH: {min_chars}-{max_chars} Chinese characters.
 
-VOCABULARY RULES:
-1. Use words from BASIC VOCABULARY and LEARNED VOCABULARY for most of the passage
-2. MUST include several REVIEW WORDS naturally throughout
-3. May use proper nouns (names, places, brands) when they fit the topic
-4. May introduce 1-3 NEW WORDS if they're essential to the topic
-5. Write natural, flowing text that tells a story or conveys information
+CRITICAL - AVOID THESE PATTERNS:
+- NO generic statements like "X is interesting/important"
+- NO "students/people like to discuss X"
+- NO "X is very popular" without specific details
+- NO vague summaries - be SPECIFIC and CONCRETE
 
-BASIC VOCABULARY (grammar and common words):
+INSTEAD:
+- Include specific details, names, numbers, or sensory descriptions
+- Show don't tell - describe actions, not just opinions
+- If it's a story, have something HAPPEN
+- If it's about a topic, include a specific fact or example
+
+VOCABULARY CONSTRAINTS:
+- Use BASIC + LEARNED vocabulary for grammar and common words
+- Include REVIEW WORDS naturally (these are priority)
+- Proper nouns (names, places) are allowed freely
+- May use 1-2 NEW WORDS if essential
+
+BASIC VOCABULARY:
 {basic_vocab}
 
-LEARNED VOCABULARY (student knows these):
+LEARNED VOCABULARY:
 {learned_list}
 
-★ REVIEW WORDS (prioritize including these):
+★ REVIEW WORDS (include these):
 {due_list}
 
-NEW WORDS (may introduce if needed):
+NEW WORDS (optional):
 {new_list}
 
-Create content that is:
-- Factually interesting (if about a real topic)
-- Engaging and not generic
-- Natural-sounding Chinese
-- At an appropriate difficulty level
-
-Return ONLY a JSON object:
+Return ONLY JSON:
 {{
-  "chinese": "The full Chinese passage",
-  "english": "English translation of the passage",
-  "title": "A short descriptive title (in English, 2-5 words)"
+  "chinese": "The passage",
+  "english": "Translation",
+  "title": "2-4 word title"
 }}"""
 
         try:
@@ -872,6 +895,92 @@ Return ONLY a JSON object:
             import traceback
             traceback.print_exc()
             raise RuntimeError(f"Failed to generate passage: {e}")
+
+    async def translate_headlines(
+        self,
+        headlines: list[dict],
+        learned_vocab: list["Word"],
+        due_vocab: list["Word"],
+        new_vocab: list["Word"]
+    ) -> list[dict]:
+        """
+        Translate news headlines to Chinese using the user's vocabulary.
+        Returns headlines with Chinese translations and pinyin.
+        """
+        if not self.is_available():
+            raise RuntimeError("LLM not available")
+
+        # Prepare vocabulary lists
+        learned_list = ", ".join([w.hanzi for w in learned_vocab[:500]])
+        due_list = ", ".join([w.hanzi for w in due_vocab[:50]])
+
+        # Basic vocab always available
+        basic_vocab = "一二三四五六七八九十百千万亿, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 说看听读写做想知道, 人国家世界政府"
+
+        # Format headlines for translation
+        headlines_text = "\n".join([
+            f"{i+1}. {h['title']}"
+            for i, h in enumerate(headlines)
+        ])
+
+        prompt = f"""Translate these news headlines to Chinese using the student's vocabulary.
+
+HEADLINES:
+{headlines_text}
+
+VOCABULARY RULES:
+1. Use BASIC + LEARNED vocabulary for most words
+2. Include REVIEW WORDS where they fit naturally
+3. Proper nouns (names, places, countries, organizations) keep their standard Chinese names
+4. Keep headlines concise and news-like
+5. Use news vocabulary style (shorter, punchy sentences)
+
+BASIC VOCABULARY:
+{basic_vocab}
+
+LEARNED VOCABULARY:
+{learned_list}
+
+REVIEW WORDS (prioritize):
+{due_list}
+
+For each headline, provide:
+- "original": the English headline
+- "chinese": Chinese translation
+- "pinyin": pinyin with tones
+
+Return ONLY a JSON array:
+[{{"original": "...", "chinese": "...", "pinyin": "..."}}]"""
+
+        try:
+            print(f"Translating {len(headlines)} headlines with {len(learned_vocab)} learned words...")
+            content = await self._call_llm(prompt, max_tokens=2048)
+            result = self._parse_json_response(content)
+
+            if not isinstance(result, list):
+                raise ValueError("Expected JSON array")
+
+            # Merge translations with original headline data
+            translated = []
+            for i, h in enumerate(headlines):
+                if i < len(result):
+                    translated.append({
+                        "original": h["title"],
+                        "description": h.get("description", ""),
+                        "link": h.get("link", ""),
+                        "pubDate": h.get("pubDate", ""),
+                        "chinese": result[i].get("chinese", ""),
+                        "pinyin": result[i].get("pinyin", "")
+                    })
+
+            print(f"Translated {len(translated)} headlines")
+            return translated
+
+        except Exception as e:
+            print(f"Headline translation error: {e}")
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError(f"Failed to translate headlines: {e}")
 
 
 # Global instance

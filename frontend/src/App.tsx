@@ -7,9 +7,10 @@ import { RecallView } from './components/RecallView'
 import { ExtendedRecallView } from './components/ExtendedRecallView'
 import { TopicGeneratorView } from './components/TopicGeneratorView'
 import { ChatView } from './components/ChatView'
+import { DailyNewsView } from './components/DailyNewsView'
 import type { ProcessedArticle, VocabStats } from './types'
 
-type AppState = 'loading' | 'error' | 'select-decks' | 'landing' | 'ready' | 'processing' | 'reading' | 'recall' | 'extended-recall' | 'topic-generator' | 'chat'
+type AppState = 'loading' | 'error' | 'select-decks' | 'landing' | 'ready' | 'processing' | 'reading' | 'recall' | 'extended-recall' | 'topic-generator' | 'chat' | 'news'
 
 function App() {
   const [state, setState] = useState<AppState>('loading')
@@ -66,6 +67,8 @@ function App() {
       setState('topic-generator')
     } else if (mode === 'chat') {
       setState('chat')
+    } else if (mode === 'news') {
+      setState('news')
     }
   }
 
@@ -182,6 +185,11 @@ function App() {
   // Chat view
   if (state === 'chat') {
     return <ChatView onBack={() => setState('landing')} />
+  }
+
+  // Daily News view
+  if (state === 'news') {
+    return <DailyNewsView onBack={() => setState('landing')} />
   }
 
   // Reading view
