@@ -61,12 +61,12 @@ export function NewWordsView({ onBack }: NewWordsViewProps) {
     }
   }, [])
 
-  const loadWord = async (word?: string) => {
+  const loadWord = async (word?: string, mode: 'new' | 'learning' = 'new') => {
     setLoadError(null)
     stopAudio()
     setReviewSubmitted(false)
     try {
-      const result = await introduceNewWord(word)
+      const result = await introduceNewWord(word, mode)
       setContent(result)
       setCurrentStep(0)
       setShowChinese(false)
@@ -90,7 +90,11 @@ export function NewWordsView({ onBack }: NewWordsViewProps) {
   }
 
   const handleIntroduceNew = () => {
-    loadWord()
+    loadWord(undefined, 'new')
+  }
+
+  const handlePracticeChallenging = () => {
+    loadWord(undefined, 'learning')
   }
 
   const handleReviewWord = () => {
@@ -191,9 +195,18 @@ export function NewWordsView({ onBack }: NewWordsViewProps) {
             <button
               onClick={handleIntroduceNew}
               disabled={loading}
-              className="w-full py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium mb-6"
+              className="w-full py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium mb-3"
             >
               {loading ? 'Loading...' : 'Introduce a New Word'}
+            </button>
+
+            {/* Practice challenging word button */}
+            <button
+              onClick={handlePracticeChallenging}
+              disabled={loading}
+              className="w-full py-4 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium mb-6"
+            >
+              {loading ? 'Loading...' : 'Practice Challenging Word'}
             </button>
 
             {/* Divider */}

@@ -224,7 +224,8 @@ class VocabManager:
             definition=definition,
             status=status,
             card_id=card_info.get("cardId"),
-            deck_name=deck_name
+            deck_name=deck_name,
+            queue=queue
         )
 
     def _find_field(self, fields: dict, possible_names: list[str]) -> str | None:
@@ -320,6 +321,17 @@ class VocabManager:
     def get_words_by_status(self, status: VocabStatus) -> list[Word]:
         """Get all words with a specific status"""
         return [w for w in self.vocab.values() if w.status == status]
+
+    def get_learning_words(self) -> list[Word]:
+        """Get words currently in learning/relearning queue (queue 1 or 3)
+        These are 'challenging' words the user is actively working on."""
+        return [w for w in self.vocab.values() if w.queue in (1, 3)]
+
+    def get_due_review_words(self) -> list[Word]:
+        """Get words that are due for review (queue 2 and due)
+        Excludes learning cards - these are stable cards ready for review."""
+        return [w for w in self.vocab.values()
+                if w.status == VocabStatus.DUE and w.queue == 2]
 
     def get_vocab_list(self) -> list[Word]:
         """Get all loaded vocabulary"""

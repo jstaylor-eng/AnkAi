@@ -139,7 +139,7 @@ export function useAnki() {
     }>('/news/headlines')
   }, [fetchApi])
 
-  const introduceNewWord = useCallback(async (word?: string) => {
+  const introduceNewWord = useCallback(async (word?: string, mode: 'new' | 'learning' = 'new') => {
     return fetchApi<{
       word: {
         hanzi: string
@@ -147,6 +147,7 @@ export function useAnki() {
         definition: string
         status: string
         card_id: number | null
+        queue: number | null
       }
       example_sentences: Array<{
         chinese: string
@@ -162,7 +163,7 @@ export function useAnki() {
       card_id: number | null
     }>('/new-word/introduce', {
       method: 'POST',
-      body: JSON.stringify({ word: word || null }),
+      body: JSON.stringify({ word: word || null, mode }),
     })
   }, [fetchApi])
 

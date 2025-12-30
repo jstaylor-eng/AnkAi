@@ -17,6 +17,7 @@ class Word(BaseModel):
     status: VocabStatus
     card_id: Optional[int] = None
     deck_name: Optional[str] = None
+    queue: Optional[int] = None  # -1=suspended, 0=new, 1=learning, 2=review, 3=relearning
 
 
 class Sentence(BaseModel):

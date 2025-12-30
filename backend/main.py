@@ -793,7 +793,8 @@ async def process_news_headline(headline_text: str):
 from pydantic import BaseModel
 
 class NewWordRequest(BaseModel):
-    word: str | None = None  # Specific word to review, or None for next new word
+    word: str | None = None  # Specific word to review
+    mode: str = "new"  # "new" = next new word, "learning" = learning/due cards
 
 class NewWordContentResponse(BaseModel):
     word: dict  # The target word info
@@ -839,8 +840,25 @@ async def introduce_new_word(request: NewWordRequest) -> NewWordContentResponse:
                     status=VocabStatus.UNKNOWN,
                     card_id=None
                 )
+        elif request.mode == "learning":
+            # Get learning cards first (queue 1 or 3), then fall back to due review cards
+            learning_words = vocab_manager.get_learning_words()
+            if learning_words:
+                target_word = learning_words[0]
+                card_id = target_word.card_id
+            else:
+                # Fall back to due review cards
+                due_review_words = vocab_manager.get_due_review_words()
+                if due_review_words:
+                    target_word = due_review_words[0]
+                    card_id = target_word.card_id
+                else:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="No challenging words available. All cards are up to date!"
+                    )
         else:
-            # Get next new word from queue
+            # Get next new word from queue (mode == "new")
             if not new_words:
                 raise HTTPException(
                     status_code=404,
