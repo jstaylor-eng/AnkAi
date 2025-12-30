@@ -818,8 +818,7 @@ async def introduce_new_word(request: NewWordRequest) -> NewWordContentResponse:
                     break
 
             if not target_word:
-                # Word not in vocab - create a basic word object
-                from models import Word, VocabStatus
+                # Word not in vocab - create a basic word object (use already-imported Word)
                 target_word = Word(
                     hanzi=request.word,
                     pinyin="",
