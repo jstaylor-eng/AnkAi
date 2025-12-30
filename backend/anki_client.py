@@ -81,11 +81,61 @@ async def get_next_intervals(card_ids: list[int]) -> list[list[int]]:
 
 async def answer_cards(answers: list[dict]) -> list[bool]:
     """
-    Answer multiple cards.
+    Answer multiple cards (non-GUI method - may not sync reliably).
     Each answer: {"cardId": int, "ease": int}
     Ease: 1=Again, 2=Hard, 3=Good, 4=Easy
     """
     return await invoke("answerCards", answers=answers)
+
+
+async def gui_show_question(card_id: int) -> bool:
+    """Show a specific card's question in the Anki reviewer GUI"""
+    try:
+        # First, use guiDeckReview to ensure reviewer is open, then show the specific card
+        await invoke("guiSelectCard", card=card_id)
+        return True
+    except AnkiConnectError:
+        return False
+
+
+async def gui_show_answer() -> bool:
+    """Show the answer for the current card in Anki GUI"""
+    try:
+        result = await invoke("guiShowAnswer")
+        return result
+    except AnkiConnectError:
+        return False
+
+
+async def gui_answer_card(ease: int) -> bool:
+    """
+    Answer the current card via Anki GUI (more reliable for syncing).
+    Ease: 1=Again, 2=Hard, 3=Good, 4=Easy
+    Note: Card must be showing its answer first (call gui_show_answer first)
+    """
+    try:
+        result = await invoke("guiAnswerCard", ease=ease)
+        return result
+    except AnkiConnectError:
+        return False
+
+
+async def gui_review_card(card_id: int, ease: int) -> bool:
+    """
+    Full GUI-based review of a card (select -> show answer -> answer).
+    This is more reliable for syncing than answerCards.
+    """
+    try:
+        # Select the card in the reviewer
+        await invoke("guiSelectCard", card=card_id)
+        # Show the answer
+        await invoke("guiShowAnswer")
+        # Answer it
+        result = await invoke("guiAnswerCard", ease=ease)
+        return result
+    except AnkiConnectError as e:
+        print(f"GUI review failed: {e}")
+        return False
 
 
 # Sync operations

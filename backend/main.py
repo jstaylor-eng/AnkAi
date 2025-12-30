@@ -648,10 +648,23 @@ async def submit_review(review: ReviewRequest):
         card_info_before = await anki_client.get_cards_info([review.card_id])
         print(f"Card before: queue={card_info_before[0].get('queue')}, due={card_info_before[0].get('due')}")
 
-        results = await anki_client.answer_cards([
-            {"cardId": review.card_id, "ease": review.ease}
-        ])
-        print(f"AnkiConnect answerCards result: {results}")
+        # Try GUI-based review first (more reliable for syncing)
+        gui_success = False
+        try:
+            gui_success = await anki_client.gui_review_card(review.card_id, review.ease)
+            print(f"GUI review result: {gui_success}")
+        except Exception as gui_err:
+            print(f"GUI review failed, falling back to answerCards: {gui_err}")
+
+        # Fall back to answerCards if GUI method fails
+        if not gui_success:
+            results = await anki_client.answer_cards([
+                {"cardId": review.card_id, "ease": review.ease}
+            ])
+            print(f"AnkiConnect answerCards result: {results}")
+            success = results[0] if results else False
+        else:
+            success = True
 
         # Get card info after review
         card_info_after = await anki_client.get_cards_info([review.card_id])
@@ -667,7 +680,7 @@ async def submit_review(review: ReviewRequest):
         except Exception as sync_err:
             print(f"Auto-sync failed (non-critical): {sync_err}")
 
-        return {"success": results[0] if results else False, "result": results}
+        return {"success": success, "method": "gui" if gui_success else "answerCards"}
     except Exception as e:
         print(f"Review error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
