@@ -592,11 +592,15 @@ export function NewWordsView({ onBack }: NewWordsViewProps) {
             </button>
           ) : (
             <button
-              onClick={handleIntroduceNew}
+              onClick={() => loadWord(undefined, currentMode)}
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              className={`px-6 py-2 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors ${
+                currentMode === 'learning'
+                  ? 'bg-amber-500 hover:bg-amber-600'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
             >
-              {loading ? 'Loading...' : 'Next Word'}
+              {loading ? 'Loading...' : currentMode === 'learning' ? 'Next Challenging Word' : 'Next Word'}
             </button>
           )}
         </div>

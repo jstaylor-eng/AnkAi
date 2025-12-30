@@ -348,8 +348,11 @@ class VocabManager:
             # Find and update the word
             for word in self.vocab.values():
                 if word.card_id == card_id:
-                    # Update status based on queue and due status
+                    # Update queue from Anki
                     queue = card_info.get("queue", 0)
+                    word.queue = queue
+
+                    # Update status based on queue and due status
                     if queue == 0:
                         word.status = VocabStatus.NEW
                     elif queue in (1, 3):  # Learning or relearning
