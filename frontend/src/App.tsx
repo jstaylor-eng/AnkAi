@@ -8,9 +8,10 @@ import { ExtendedRecallView } from './components/ExtendedRecallView'
 import { TopicGeneratorView } from './components/TopicGeneratorView'
 import { ChatView } from './components/ChatView'
 import { DailyNewsView } from './components/DailyNewsView'
+import { NewWordsView } from './components/NewWordsView'
 import type { ProcessedArticle, VocabStats } from './types'
 
-type AppState = 'loading' | 'error' | 'select-decks' | 'landing' | 'ready' | 'processing' | 'reading' | 'recall' | 'extended-recall' | 'topic-generator' | 'chat' | 'news'
+type AppState = 'loading' | 'error' | 'select-decks' | 'landing' | 'ready' | 'processing' | 'reading' | 'recall' | 'extended-recall' | 'topic-generator' | 'chat' | 'news' | 'new-words'
 
 function App() {
   const [state, setState] = useState<AppState>('loading')
@@ -69,6 +70,8 @@ function App() {
       setState('chat')
     } else if (mode === 'news') {
       setState('news')
+    } else if (mode === 'new-words') {
+      setState('new-words')
     }
   }
 
@@ -190,6 +193,11 @@ function App() {
   // Daily News view
   if (state === 'news') {
     return <DailyNewsView onBack={() => setState('landing')} />
+  }
+
+  // New Words view
+  if (state === 'new-words') {
+    return <NewWordsView onBack={() => setState('landing')} />
   }
 
   // Reading view

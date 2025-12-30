@@ -196,7 +196,8 @@ class LLMService:
         # Prepare vocabulary lists for the prompt
         learned_list = ", ".join(learned_vocab[:500])  # Limit size
         due_list = ", ".join([w.hanzi for w in due_vocab[:20]])
-        new_list = ", ".join([w.hanzi for w in new_vocab[:max_new_words]])
+        # NOTE: New words temporarily disabled - will be introduced via dedicated New Words feature
+        # new_list = ", ".join([w.hanzi for w in new_vocab[:max_new_words]])
 
         # Combine original sentences
         original_text = "\n".join([s.original for s in sentences])
@@ -208,20 +209,16 @@ TASK: Rewrite the following Chinese text so the student can understand it.
 RULES:
 1. Use ONLY words from the LEARNED VOCABULARY list for general text
 2. You MUST naturally include these REVIEW WORDS (the student has seen these before): {due_list}
-3. You may introduce up to {max_new_words} words from NEW WORDS if they fit naturally: {new_list}
-4. For concepts requiring unknown vocabulary, paraphrase using learned words
-5. Keep the core meaning and information of the original
-6. Proper nouns (names, places) may be kept with context clues
-7. Each sentence should be natural and grammatically correct
+3. For concepts requiring unknown vocabulary, paraphrase using learned words
+4. Keep the core meaning and information of the original
+5. Proper nouns (names, places) may be kept with context clues
+6. Each sentence should be natural and grammatically correct
 
 LEARNED VOCABULARY (use freely):
 {learned_list}
 
 REVIEW WORDS (must include):
 {due_list}
-
-NEW WORDS (may introduce):
-{new_list}
 
 ORIGINAL TEXT:
 {original_text}
@@ -457,14 +454,15 @@ Respond in JSON format:
         random.shuffle(learned_shuffled)
         due_shuffled = due_vocab.copy()
         random.shuffle(due_shuffled)
-        new_shuffled = new_vocab.copy()
-        random.shuffle(new_shuffled)
+        # NOTE: New words temporarily disabled - will be introduced via dedicated New Words feature
+        # new_shuffled = new_vocab.copy()
+        # random.shuffle(new_shuffled)
 
         # Take a diverse sample of learned vocab
         learned_list = ", ".join([w.hanzi for w in learned_shuffled[:300]])
         # Prioritize ALL due words - these are the ones to practice
         due_list = ", ".join([w.hanzi for w in due_shuffled[:50]])
-        new_list = ", ".join([w.hanzi for w in new_shuffled[:10]])
+        # new_list = ", ".join([w.hanzi for w in new_shuffled[:10]])
 
         # Basic vocab always available
         basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 吃喝做说看听读写, 家人朋友老师学生"
@@ -507,9 +505,6 @@ LEARNED VOCABULARY (student knows these - use variety from this list):
 
 ★ REVIEW WORDS - PRIORITY ★ (MUST include these - spread across sentences):
 {due_list}
-
-NEW WORDS (may introduce 1-2 total):
-{new_list}
 
 IMPORTANT:
 - Use DIFFERENT review words in each sentence
@@ -580,7 +575,8 @@ Return ONLY a JSON array:
         # Prepare vocabulary lists
         learned_list = ", ".join([w.hanzi for w in learned_vocab[:400]])
         due_list = ", ".join([w.hanzi for w in due_vocab[:30]])
-        new_list = ", ".join([w.hanzi for w in new_vocab[:max_new_words * 2]])
+        # NOTE: New words temporarily disabled - will be introduced via dedicated New Words feature
+        # new_list = ", ".join([w.hanzi for w in new_vocab[:max_new_words * 2]])
 
         # Basic vocab always available
         basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 吃喝做说看听读写, 家人朋友老师学生, 知道觉得喜欢希望"
@@ -597,10 +593,9 @@ Return ONLY a JSON array:
 VOCABULARY RULES (STRICT - FOLLOW EXACTLY):
 1. Use ONLY words from BASIC VOCABULARY and LEARNED VOCABULARY for all grammar and common words
 2. TRY to naturally include 1-2 REVIEW WORDS in your response - these are words the student needs to practice
-3. May introduce up to {max_new_words} NEW WORDS if contextually necessary
-4. Proper nouns (names, places, brands) may be used when the conversation requires them
-5. Keep responses conversational and natural (1-3 sentences)
-6. Respond in a helpful, encouraging way
+3. Proper nouns (names, places, brands) may be used when the conversation requires them
+4. Keep responses conversational and natural (1-3 sentences)
+5. Respond in a helpful, encouraging way
 
 BASIC VOCABULARY (always safe to use):
 {basic_vocab}
@@ -610,9 +605,6 @@ LEARNED VOCABULARY (student knows these - use freely):
 
 REVIEW WORDS (prioritize including these naturally):
 {due_list}
-
-NEW WORDS (may introduce up to {max_new_words}):
-{new_list}
 
 CONVERSATION HISTORY:
 {history_text if history_text else "(This is the start of the conversation)"}
@@ -765,7 +757,8 @@ Respond naturally as a tutor would. Return ONLY a JSON object:
         # Prepare vocabulary lists
         learned_list = ", ".join([w.hanzi for w in learned_shuffled[:400]])
         due_list = ", ".join([w.hanzi for w in due_shuffled[:40]])
-        new_list = ", ".join([w.hanzi for w in new_vocab[:8]])
+        # NOTE: New words temporarily disabled - will be introduced via dedicated New Words feature
+        # new_list = ", ".join([w.hanzi for w in new_vocab[:8]])
 
         # Basic vocab always available
         basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 吃喝做说看听读写, 家人朋友老师学生, 知道觉得喜欢希望"
@@ -849,7 +842,6 @@ VOCABULARY CONSTRAINTS:
 - Use BASIC + LEARNED vocabulary for grammar and common words
 - Include REVIEW WORDS naturally (these are priority)
 - Proper nouns (names, places) are allowed freely
-- May use 1-2 NEW WORDS if essential
 
 BASIC VOCABULARY:
 {basic_vocab}
@@ -859,9 +851,6 @@ LEARNED VOCABULARY:
 
 ★ REVIEW WORDS (include these):
 {due_list}
-
-NEW WORDS (optional):
-{new_list}
 
 Return ONLY JSON:
 {{
@@ -981,6 +970,102 @@ Return ONLY a JSON array:
             import traceback
             traceback.print_exc()
             raise RuntimeError(f"Failed to translate headlines: {e}")
+
+
+    async def generate_new_word_content(
+        self,
+        target_word: "Word",
+        learned_vocab: list["Word"],
+        due_vocab: list["Word"]
+    ) -> dict:
+        """
+        Generate content for introducing a new word:
+        - 2 example sentences showing the word in context (different meanings if applicable)
+        - 2 recall sentences (English prompt for Chinese recall)
+        All sentences use only known vocabulary + the new word + proper nouns
+        """
+        if not self.is_available():
+            raise RuntimeError("LLM not available")
+
+        # Prepare vocabulary lists
+        learned_list = ", ".join([w.hanzi for w in learned_vocab[:400]])
+        due_list = ", ".join([w.hanzi for w in due_vocab[:30]])
+
+        # Basic vocab always available
+        basic_vocab = "一二三四五六七八九十百千万, 我你他她它我们你们他们, 的地得了着过吗呢吧, 是有在要会能可以想去来, 和但因为所以如果, 好大小多少, 年月日天时分秒点, 上下左右前后里外中, 不没很太最更都也还就, 这那什么谁哪怎么为什么, 吃喝做说看听读写, 家人朋友老师学生, 知道觉得喜欢希望"
+
+        prompt = f"""You are helping a student learn a new Chinese word.
+
+TARGET WORD TO TEACH:
+- Chinese: {target_word.hanzi}
+- Pinyin: {target_word.pinyin}
+- Definition: {target_word.definition}
+
+TASK: Create learning content for this word using ONLY the student's known vocabulary + the target word + proper nouns.
+
+VOCABULARY AVAILABLE:
+BASIC (always safe): {basic_vocab}
+LEARNED: {learned_list}
+REVIEW (include if natural): {due_list}
+TARGET WORD: {target_word.hanzi}
+
+Generate:
+1. TWO example sentences showing the target word in context
+   - If the word has multiple meanings, show different meanings
+   - Each sentence should be 8-15 characters
+   - Chinese text should highlight how the word is used
+
+2. TWO recall sentences for practice
+   - Provide English that the student will translate to Chinese
+   - The Chinese translation MUST use the target word
+   - Keep sentences simple (8-15 characters in Chinese)
+
+Return ONLY JSON:
+{{
+  "example_sentences": [
+    {{
+      "chinese": "...",
+      "pinyin": "...",
+      "english": "...",
+      "word_highlight": "meaning or usage note for this context"
+    }},
+    {{
+      "chinese": "...",
+      "pinyin": "...",
+      "english": "...",
+      "word_highlight": "meaning or usage note for this context"
+    }}
+  ],
+  "recall_sentences": [
+    {{
+      "english": "...",
+      "chinese": "...",
+      "pinyin": "..."
+    }},
+    {{
+      "english": "...",
+      "chinese": "...",
+      "pinyin": "..."
+    }}
+  ]
+}}"""
+
+        try:
+            print(f"Generating content for new word: {target_word.hanzi}")
+            content = await self._call_llm(prompt, max_tokens=1024)
+            result = self._parse_json_response(content)
+
+            if not isinstance(result, dict):
+                raise ValueError("Expected JSON object")
+
+            print(f"Generated {len(result.get('example_sentences', []))} examples, {len(result.get('recall_sentences', []))} recall sentences")
+            return result
+
+        except Exception as e:
+            print(f"New word content generation error: {e}")
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError(f"Failed to generate content: {e}")
 
 
 # Global instance

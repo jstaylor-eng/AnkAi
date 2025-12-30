@@ -775,6 +775,90 @@ async def process_news_headline(headline_text: str):
         raise HTTPException(status_code=500, detail=f"Processing error: {e}")
 
 
+# New Words operations
+
+from pydantic import BaseModel
+
+class NewWordRequest(BaseModel):
+    word: str | None = None  # Specific word to review, or None for next new word
+
+class NewWordContentResponse(BaseModel):
+    word: dict  # The target word info
+    example_sentences: list[dict]  # 2 example sentences with context
+    recall_sentences: list[dict]   # 2 recall sentences
+    card_id: int | None = None     # Card ID for review submission
+
+
+@app.post("/api/new-word/introduce")
+async def introduce_new_word(request: NewWordRequest) -> NewWordContentResponse:
+    """Get content for introducing a new word to the learner"""
+    try:
+        # Get vocabulary
+        learned = vocab_manager.get_words_by_status(VocabStatus.LEARNED)
+        due = vocab_manager.get_words_by_status(VocabStatus.DUE)
+        new_words = vocab_manager.get_words_by_status(VocabStatus.NEW)
+
+        if not learned and not due:
+            raise HTTPException(
+                status_code=400,
+                detail="No vocabulary loaded. Please select decks first."
+            )
+
+        # Find the target word
+        target_word = None
+        card_id = None
+
+        if request.word:
+            # Look up specific word (could be from any status)
+            all_vocab = vocab_manager.get_vocab_list()
+            for w in all_vocab:
+                if w.hanzi == request.word:
+                    target_word = w
+                    card_id = w.card_id
+                    break
+
+            if not target_word:
+                # Word not in vocab - create a basic word object
+                from models import Word, VocabStatus
+                target_word = Word(
+                    hanzi=request.word,
+                    pinyin="",
+                    definition="(lookup requested)",
+                    status=VocabStatus.UNKNOWN,
+                    card_id=None
+                )
+        else:
+            # Get next new word from queue
+            if not new_words:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No new words available. All words have been introduced!"
+                )
+            target_word = new_words[0]
+            card_id = target_word.card_id
+
+        # Generate learning content
+        content = await llm_service.generate_new_word_content(
+            target_word=target_word,
+            learned_vocab=learned,
+            due_vocab=due
+        )
+
+        return NewWordContentResponse(
+            word=target_word.model_dump(),
+            example_sentences=content.get("example_sentences", []),
+            recall_sentences=content.get("recall_sentences", []),
+            card_id=card_id
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to introduce word: {e}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

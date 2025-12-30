@@ -139,6 +139,33 @@ export function useAnki() {
     }>('/news/headlines')
   }, [fetchApi])
 
+  const introduceNewWord = useCallback(async (word?: string) => {
+    return fetchApi<{
+      word: {
+        hanzi: string
+        pinyin: string
+        definition: string
+        status: string
+        card_id: number | null
+      }
+      example_sentences: Array<{
+        chinese: string
+        pinyin: string
+        english: string
+        word_highlight: string
+      }>
+      recall_sentences: Array<{
+        english: string
+        chinese: string
+        pinyin: string
+      }>
+      card_id: number | null
+    }>('/new-word/introduce', {
+      method: 'POST',
+      body: JSON.stringify({ word: word || null }),
+    })
+  }, [fetchApi])
+
   return {
     loading,
     error,
@@ -153,5 +180,6 @@ export function useAnki() {
     generateRecallPassage,
     sendChatMessage,
     getNewsHeadlines,
+    introduceNewWord,
   }
 }
