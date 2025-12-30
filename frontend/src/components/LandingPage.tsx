@@ -9,7 +9,7 @@ interface FeatureCard {
 }
 
 const FEATURE_CARDS: FeatureCard[] = [
-  { id: 'new-words', title: 'New Words', description: 'Learn new vocabulary', icon: '✨', enabled: true },
+  { id: 'new-words', title: 'New & Challenging Words', description: 'Learn new vocabulary', icon: '✨', enabled: true },
   { id: 'read', title: 'Read Articles', description: 'Practice with news & stories', icon: '📖', enabled: true },
   { id: 'news', title: 'Daily News', description: 'BBC headlines in Chinese', icon: '📰', enabled: true },
   { id: 'recall', title: 'Recall Practice', description: 'Quick translation drills', icon: '🔄', enabled: true },

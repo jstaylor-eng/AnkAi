@@ -38,9 +38,11 @@ export function NewWordsView({ onBack }: NewWordsViewProps) {
 
   // Learning state
   const [content, setContent] = useState<WordContent | null>(null)
+  const [currentMode, setCurrentMode] = useState<'new' | 'learning'>('new')
   const [currentStep, setCurrentStep] = useState(0)
   const [showChinese, setShowChinese] = useState(false)
   const [showPinyin, setShowPinyin] = useState(false)
+  const [showWordDetails, setShowWordDetails] = useState(false)  // For challenging words first tab
   const [loadError, setLoadError] = useState<string | null>(null)
   const [intervals, setIntervals] = useState<{ again: string; hard: string; good: string; easy: string } | null>(null)
   const [reviewSubmitted, setReviewSubmitted] = useState(false)
@@ -68,9 +70,11 @@ export function NewWordsView({ onBack }: NewWordsViewProps) {
     try {
       const result = await introduceNewWord(word, mode)
       setContent(result)
+      setCurrentMode(mode)
       setCurrentStep(0)
       setShowChinese(false)
       setShowPinyin(false)
+      setShowWordDetails(false)
       setViewState('learning')
 
       // Load intervals if we have a card ID
@@ -175,7 +179,7 @@ export function NewWordsView({ onBack }: NewWordsViewProps) {
             >
               &larr; Back
             </button>
-            <h1 className="font-bold">New Words</h1>
+            <h1 className="font-bold">New & Challenging Words</h1>
           </div>
         </header>
 
@@ -286,7 +290,7 @@ export function NewWordsView({ onBack }: NewWordsViewProps) {
             &larr; Back
           </button>
           <div className="flex-1">
-            <h1 className="font-bold">New Words</h1>
+            <h1 className="font-bold">New & Challenging Words</h1>
             <p className="text-xs text-gray-500">
               Learning: {content.word.hanzi}
             </p>
@@ -334,8 +338,21 @@ export function NewWordsView({ onBack }: NewWordsViewProps) {
           {currentStep === 0 && (
             <div className="text-center">
               <div className="text-5xl chinese-text mb-4">{content.word.hanzi}</div>
-              <div className="text-xl text-gray-600 mb-2">{content.word.pinyin}</div>
-              <div className="text-lg text-gray-800">{content.word.definition}</div>
+
+              {/* For new words: always show details. For challenging words: show after reveal */}
+              {(currentMode === 'new' || showWordDetails) ? (
+                <>
+                  <div className="text-xl text-gray-600 mb-2">{content.word.pinyin}</div>
+                  <div className="text-lg text-gray-800">{content.word.definition}</div>
+                </>
+              ) : (
+                <button
+                  onClick={() => setShowWordDetails(true)}
+                  className="mt-4 px-6 py-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors font-medium"
+                >
+                  Show Meaning
+                </button>
+              )}
 
               <button
                 onClick={() => handlePlayAudio(content.word.hanzi)}
