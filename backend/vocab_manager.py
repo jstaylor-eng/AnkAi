@@ -47,6 +47,10 @@ class VocabManager:
     _introduced_date: str = ""  # ISO date string for reset check
     _daily_new_limit: int = 5   # Default, will be updated from deck config
 
+    # Track when cards were last reviewed locally (card_id -> timestamp)
+    # Used to put recently reviewed cards at the back of the queue
+    _last_reviewed: dict[int, float] = {}
+
     # Basic vocabulary assumed known by any learner (HSK1-3 level essentials)
     BASIC_VOCAB = {
         # Numbers
@@ -324,14 +328,22 @@ class VocabManager:
 
     def get_learning_words(self) -> list[Word]:
         """Get words currently in learning/relearning queue (queue 1 or 3)
-        These are 'challenging' words the user is actively working on."""
-        return [w for w in self.vocab.values() if w.queue in (1, 3)]
+        These are 'challenging' words the user is actively working on.
+        Sorted by last review time (oldest first, so recently reviewed are at the back)."""
+        words = [w for w in self.vocab.values() if w.queue in (1, 3)]
+        # Sort by last review time - words with no review time (0) come first
+        words.sort(key=lambda w: VocabManager._last_reviewed.get(w.card_id or 0, 0))
+        return words
 
     def get_due_review_words(self) -> list[Word]:
         """Get words that are due for review (queue 2 and due)
-        Excludes learning cards - these are stable cards ready for review."""
-        return [w for w in self.vocab.values()
-                if w.status == VocabStatus.DUE and w.queue == 2]
+        Excludes learning cards - these are stable cards ready for review.
+        Sorted by last review time (oldest first)."""
+        words = [w for w in self.vocab.values()
+                 if w.status == VocabStatus.DUE and w.queue == 2]
+        # Sort by last review time - words with no review time (0) come first
+        words.sort(key=lambda w: VocabManager._last_reviewed.get(w.card_id or 0, 0))
+        return words
 
     def get_vocab_list(self) -> list[Word]:
         """Get all loaded vocabulary"""
@@ -339,9 +351,14 @@ class VocabManager:
 
     async def refresh_card_status(self, card_id: int) -> None:
         """Refresh the status of a specific card after review"""
+        import time
+
         cards_info = await anki_client.get_cards_info([card_id])
         due_status = await anki_client.are_due([card_id])
         is_due = due_status[0] if due_status else False
+
+        # Record when this card was reviewed (for local queue ordering)
+        VocabManager._last_reviewed[card_id] = time.time()
 
         if cards_info:
             card_info = cards_info[0]
